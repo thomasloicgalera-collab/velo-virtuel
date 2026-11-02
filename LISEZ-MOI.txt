@@ -1,0 +1,77 @@
+VÉLO VIRTUEL — version de test (v69)
+=====================================
+
+Merci de tester l'application ! Elle est en cours de développement : tes retours m'aident beaucoup.
+
+
+1. INSTALLER (2 minutes)
+   - Décompresse le fichier zip (double-clic dessus).
+   - Ouvre le dossier « Velo virtuel », puis ouvre le fichier « index.html » avec Google Chrome
+     (clic droit > Ouvrir avec > Google Chrome). Microsoft Edge fonctionne aussi.
+   - Sur ordinateur uniquement (Mac ou PC), pas sur téléphone ni tablette.
+   - Safari et Firefox ne savent pas se connecter en Bluetooth au home trainer : utilise Chrome ou Edge.
+   - Il faut une connexion Internet (moteur 3D, cartes et reliefs des mondes réels).
+   - Rien à installer d'autre : tout se passe dans le navigateur.
+
+
+2. AVANT DE ROULER
+   - Au démarrage, connecte en Bluetooth ton home trainer (Wahoo, Tacx, Elite… compatible « FTMS »),
+     ton capteur de puissance ou ta ceinture cardio. Pas de home trainer ? « Passer cette étape » pour visiter.
+   - Onglet « Paramètres » : renseigne ton poids, ta FTP et ta FC max (pour des vitesses et des zones justes).
+   - Onglet « Personnalisation » : ton avatar, ton vélo (route ou contre-la-montre) et tes roues.
+
+
+3. ROULER (onglet « Rouler »)
+   Choisis un mode, un monde, puis « C'est parti ». La sortie démarre dès que tu pédales.
+
+   Les modes :
+   - Sortie libre : seul, à ton rythme.
+   - Endurance : en groupe avec des coureurs virtuels, à allure tranquille.
+   - Mon record : contre ton fantôme (ton meilleur tour sur le circuit).
+   - Course : contre les coureurs virtuels, avec arrivée après 1 à 20 tours (option : échauffement de 10 min).
+   - Contre-la-montre : départs toutes les 30 secondes, pas d'aspiration, écarts donnés tous les 100 m.
+   - Tour à étapes : 3 à 5 étapes sur plusieurs mondes, à courir quand tu veux (une par jour par exemple),
+     avec classement général, maillot jaune et maillot à pois.
+
+   Les mondes : col des Alpes, col des Pyrénées (avec des brebis), Pavés du Nord, forêt des Ardennes,
+   Toscane et ses chemins blancs, bord de mer, désert, critérium de nuit en ville, 5 mondes Triathlon,
+   et des mondes réels (Longchamp, Mont Ventoux…). Tu peux créer ton propre monde à partir d'un fichier GPX :
+   bouton « ＋ Nouveau monde », ou dépose le fichier sur la page.
+
+   Pendant la sortie :
+   - Segments chronométrés (sprints, montées, secteurs) annoncés en roulant ; ton temps est comparé à ton record.
+   - Dans les virages serrés, le vélo freine tout seul ; sur les pavés, la résistance « tape » un peu.
+   - Rappels pour boire et manger sur les longues sorties.
+   - Bouton « 2e écran » : un tableau de bord dans une deuxième fenêtre, à glisser sur un autre écran ou une télé.
+     Si rien ne s'ouvre, autorise les fenêtres pop-up pour cette page (icône dans la barre d'adresse de Chrome).
+   - Termine avec « Terminer et enregistrer » : la sortie est gardée et un fichier .FIT est téléchargé
+     (à importer dans Strava, Garmin Connect…).
+
+   Au clavier : Espace = pause, V ou 1 à 6 = caméra, F = plein écran, H = cacher les encarts,
+   ↑ ↓ = intensité, N = intervalle suivant, M = son, E = 2e écran, K = aide.
+
+
+4. S'ENTRAÎNER
+   - Onglet « Séances » : séances guidées en mode ERG (le home trainer impose la puissance), plan de la semaine
+     avec conseil du jour, import de fichiers .erg / .mrc / .zwo, et « Créer ma séance » pour construire la tienne.
+   - Sur la page d'accueil, choisis une « Séance ERG » à suivre pendant ta sortie dans un monde.
+   - Onglet « Historique » : tes sorties, bilans de la semaine et du mois, courbe de puissance, forme,
+     et « Revoir la sortie en 3D » dans le détail d'une sortie.
+   - Progression : niveaux, défis de la semaine, défis au long cours et badges (clique sur « Niv. » en haut à droite).
+
+
+5. CE QUI M'INTÉRESSE DANS TES RETOURS
+   - Ce qui ne marche pas : un bouton sans effet, un message d'erreur, une connexion Bluetooth qui échoue.
+   - La fluidité : l'image saccade-t-elle ? Si oui, essaie Paramètres > Qualité « Normale » ou « Légère »
+     et Résolution « Full HD ».
+   - Les sensations : la résistance du home trainer, les vitesses, le freinage, les vibrations sur les pavés.
+   - Ce que tu aimes, ce qui manque, ce qui est difficile à comprendre.
+
+   Pour chaque problème, note si possible :
+   - ce que tu faisais juste avant,
+   - ton ordinateur (Mac ou PC) et ton home trainer,
+   - une capture d'écran (Mac : Cmd + Maj + 4 ; PC : touche Windows + Maj + S).
+
+
+Tes séances et réglages restent uniquement dans ton navigateur : rien n'est envoyé à personne.
+Pense à faire de temps en temps une sauvegarde (Paramètres > Sauvegarde de mes données).

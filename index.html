@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vélo virtuel</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="barre-app">
+  <div class="marque">
+    <svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="7" cy="16" r="5.5"/><circle cx="25" cy="16" r="5.5"/><path d="M7 16l5-9h9l4 9M12 7l4 9 5-9M10 4h4"/></svg>
+    <span>Vélo virtuel</span>
+  </div>
+  <nav class="onglets" role="tablist">
+    <button role="tab" id="tab-world" aria-selected="true" aria-controls="onglet-world" title="Rouler"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19l6-9 4 5 3-4 5 8z"/><circle cx="17" cy="6" r="2"/></svg>Rouler</button>
+    <button role="tab" id="tab-seance" aria-selected="false" aria-controls="onglet-seance" title="Séances"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Séances</button>
+    <button role="tab" id="tab-historique" aria-selected="false" aria-controls="onglet-historique" title="Historique"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-9M12 20V5M19 20v-6"/></svg>Historique</button>
+    <button role="tab" id="tab-perso" aria-selected="false" aria-controls="onglet-perso" title="Personnalisation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Personnalisation</button>
+    <button role="tab" id="tab-parametres" aria-selected="false" aria-controls="onglet-parametres" title="Paramètres"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>Paramètres</button>
+    <button role="tab" id="tab-connectivite" aria-selected="false" aria-controls="onglet-connectivite" title="Connectivité"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg>Connectivité</button>
+  </nav>
+  <button type="button" class="puce-niveau" id="puce-niveau" title="Progression, défis et badges"><span class="pn-l">Niv.</span><span class="pn-n">1</span><span class="pn-b"><i></i></span></button>
+  <div class="capteurs-etat" aria-hidden="true">
+    <span data-cap="trainer" title="Home trainer"><i></i>Trainer</span>
+    <span data-cap="power" title="Capteur de puissance"><i></i>Puissance</span>
+    <span data-cap="hr" title="Ceinture cardio"><i></i>Cardio</span>
+  </div>
+</header>
+<div id="ecran-connexion" class="ecran-connexion" role="dialog" aria-modal="true" aria-labelledby="ec-titre">
+  <div class="ec-carte">
+    <div class="marque ec-marque">
+      <svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="7" cy="16" r="5.5"/><circle cx="25" cy="16" r="5.5"/><path d="M7 16l5-9h9l4 9M12 7l4 9 5-9M10 4h4"/></svg>
+      <span>Vélo virtuel</span>
+    </div>
+    <h1 id="ec-titre">Connecte tes accessoires</h1>
+    <p class="intro">Home trainer, capteur de puissance et ceinture cardio se connectent en Bluetooth. Tu peux aussi passer cette étape pour simplement visiter l’application : tout reste accessible plus tard dans l’onglet Connectivité.</p>
+    <div id="ec-appareils"></div>
+    <div class="info ec-alerte" id="ec-alerte" hidden>Ce navigateur ne gère pas le Bluetooth Web : ouvre la page dans Chrome ou Edge pour connecter tes accessoires.</div>
+    <div class="ec-actions">
+      <button type="button" class="plein" id="btn-ec-valider" disabled>Valider et continuer</button>
+      <button type="button" class="lien" id="btn-ec-passer">Passer cette étape</button>
+    </div>
+    <div class="info" id="ec-aide">Connecte au moins un accessoire pour valider.</div>
+  </div>
+</div>
+<main>
+  <div id="alerte">Ce navigateur ne gère pas le Bluetooth Web. Ouvre cette page dans Chrome ou Edge sur ordinateur (ou Chrome sur Android).</div>
+
+  <div id="onglet-connectivite" hidden>
+  <p class="intro">Connecte tes capteurs, roule sur un parcours ou suis une séance structurée. Quand tu cliques sur « Terminer et exporter », ta séance est téléchargée au format .FIT, enregistrée dans l’onglet Historique, et l’écran est remis à zéro pour la suivante.</p>
+  <section class="appareils hors-course">
+    <div class="carte appareil">
+      <h2>Home trainer</h2>
+      <div class="etat" id="st-trainer">Non connecté</div>
+      <button class="plein" id="btn-trainer">Connecter le home trainer</button>
+    </div>
+    <div class="carte appareil">
+      <h2>Capteur de puissance</h2>
+      <div class="etat" id="st-power">Non connecté (facultatif)</div>
+      <button id="btn-power">Connecter le capteur de puissance</button>
+    </div>
+    <div class="carte appareil">
+      <h2>Ceinture cardio</h2>
+      <div class="etat" id="st-hr">Non connectée</div>
+      <button id="btn-hr">Connecter la ceinture cardio</button>
+    </div>
+  </section>
+  <section class="carte hors-course">
+    <h2>Journal</h2>
+    <pre id="journal">Prêt. Commence par connecter le home trainer.</pre>
+  </section>
+  </div>
+
+  <div id="onglet-seance" hidden>
+  <div class="info" id="resume-capteurs" style="margin-bottom:10px"></div>
+
+  <section class="principal">
+    <div class="carte">
+      <h2>En direct</h2>
+      <div class="mesures">
+        <div class="mesure"><div class="val"><span id="m-puissance">–</span><span class="zone-tag" id="z-puissance"></span></div><div class="lib">Puissance (W)</div></div>
+        <div class="mesure"><div class="val" id="m-cadence">–</div><div class="lib">Cadence (tr/min)</div></div>
+        <div class="mesure"><div class="val"><span id="m-fc">–</span><span class="zone-tag" id="z-fc"></span></div><div class="lib">Fréquence cardiaque (bpm)</div></div>
+        <div class="mesure"><div class="val" id="m-vitesse">0</div><div class="lib">Vitesse virtuelle (km/h)</div></div>
+      </div>
+      <div class="mesures moyennes">
+        <div class="mesure"><div class="val" id="m-duree">00:00</div><div class="lib">Durée de la séance</div></div>
+        <div class="mesure"><div class="val" id="m-denivele">0</div><div class="lib">Dénivelé positif (m)</div></div>
+        <div class="mesure"><div class="val" id="m-vitmoy">–</div><div class="lib">Vitesse moyenne (km/h)</div></div>
+        <div class="mesure"><div class="val" id="m-fcmoy">–</div><div class="lib">FC moyenne (bpm)</div></div>
+        <div class="mesure"><div class="val" id="m-cadmoy">–</div><div class="lib">Cadence moyenne (tr/min)</div></div>
+      </div>
+      <div class="source hors-course" id="source-puissance">Aucune puissance reçue pour l’instant.</div>
+    </div>
+
+    <div class="carte">
+      <h2 class="hors-course">Parcours et résistance</h2>
+      <div class="parcours-grille"><div class="pg-g">
+      <div class="pente">
+        <div class="grand" id="pente-affichee">0,0&nbsp;%</div>
+        <div class="legende" id="pente-envoyee">Pente envoyée au home trainer : –</div>
+      </div>
+      <canvas id="profil" aria-label="Profil altimétrique du parcours"></canvas>
+      <div class="info a-venir" id="a-venir"></div>
+      <div class="info" id="reste-parcours"></div>
+      <div class="info hors-course" id="info-parcours"></div>
+      <div class="barre">
+        <button class="plein" id="btn-balade">Démarrer la balade</button>
+        <button class="hors-course" id="btn-export">Terminer et exporter (.FIT)</button>
+        <button class="hors-course" id="btn-abandon">Abandonner la séance</button>
+        <span class="stats" id="stats">0,00 km – 00:00</span>
+      </div>
+      <div class="barre hors-course">
+        <label class="bouton">Importer un parcours (.gpx)<input type="file" id="fichier-gpx" accept=".gpx,application/gpx+xml"></label>
+        <button id="btn-demo">Parcours vallonné (démo)</button>
+        <button id="btn-plat">Parcours plat</button>
+      </div>
+      </div><div class="pg-d">
+      <div class="reglages hors-course">
+        <fieldset>
+          <legend>Résistance du home trainer</legend>
+          <label><input type="radio" name="mode" value="route" checked> Pente du parcours virtuel</label>
+          <label><input type="radio" name="mode" value="erg"> Séance structurée (mode ERG)</label>
+          <label><input type="radio" name="mode" value="manuel"> Pente manuelle (pour tester)</label>
+          <input type="range" id="pente-manuelle" min="-10" max="20" step="0.5" value="0" aria-label="Pente manuelle">
+          <div class="stats" id="pente-manuelle-val">0,0&nbsp;%</div>
+        </fieldset>
+        <fieldset>
+          <legend>Réalisme de la pente</legend>
+          <input type="range" id="difficulte" min="0" max="100" step="5" value="100" aria-label="Réalisme de la pente">
+          <div class="stats" id="difficulte-val">100&nbsp;% (une pente de 10&nbsp;% est envoyée au home trainer à 12&nbsp;%, résistance +20&nbsp;% comprise)</div>
+        </fieldset>
+        <fieldset>
+          <legend>Résistance en descente</legend>
+          <input type="range" id="difficulte-desc" min="0" max="100" step="5" value="70" aria-label="Résistance en descente">
+          <div class="stats" id="difficulte-desc-val"></div>
+        </fieldset>
+      </div>
+      </div></div>
+    </div>
+  </section>
+
+  <section class="carte" id="createur">
+    <h2>Créer ma séance</h2>
+    <p class="info" style="margin-top:0">Construis ta séance bloc par bloc : un bloc à puissance fixe, une rampe (la puissance monte ou descend), ou des répétitions (par exemple 3 × [8 min à 105 %, 4 min à 55 %]). Les puissances sont en pourcentage de ton FTP. Une fois enregistrée, elle est dans « Mes séances » ici et sur la page d’accueil.</p>
+    <div class="crea-tete"><label>Nom&nbsp;: <input type="text" id="crea-nom" maxlength="40" placeholder="Ma séance"></label>
+      <span class="crea-ajouts"><button type="button" data-crea="echauf" class="petit">+ Échauffement 10 min</button><button type="button" data-crea="bloc" class="petit">+ Bloc</button><button type="button" data-crea="rampe" class="petit">+ Rampe</button><button type="button" data-crea="rep" class="petit">+ Répétitions</button><button type="button" data-crea="calme" class="petit">+ Retour au calme 10 min</button></span></div>
+    <div id="crea-lignes"></div>
+    <canvas id="crea-profil" class="court" aria-label="Profil de la séance en création"></canvas>
+    <div class="barre"><span class="stats" id="crea-stats"></span>
+      <button type="button" id="crea-vider">Tout effacer</button><button type="button" id="crea-enreg" class="plein">Enregistrer dans mes séances</button><button type="button" id="crea-rouler">Enregistrer et rouler</button><span class="stats" id="crea-msg"></span></div>
+  </section>
+
+  <section class="carte">
+    <h2>Séances proposées</h2>
+    <p class="info" style="margin-top:0">Les puissances sont en pourcentage de ton FTP. « Charger » prépare la séance ci-dessous ; « Rouler cette séance » active en plus le mode ERG : le home trainer impose alors la puissance de chaque intervalle dès que tu démarres la balade.</p>
+    <div id="biblio"></div>
+    <div class="barre">
+      <label class="bouton">Importer une séance (.erg, .mrc ou .zwo)<input type="file" id="fichier-erg" multiple accept=".erg,.mrc,.zwo,.xml,text/plain"></label>
+      <span class="stats" id="msg-import"></span>
+    </div>
+  </section>
+
+  <section class="carte">
+    <h2>Séance chargée</h2>
+    <div class="barre" style="margin-top:0">
+      <button id="btn-vider">Tout effacer</button>
+      <button id="btn-erg-rapide" class="plein">Activer le mode ERG avec cette séance</button>
+    </div>
+    <ol id="liste-int"></ol>
+    <div class="barre" style="margin-top:0">
+      <label style="margin:0">Durée&nbsp;: <input type="number" id="nv-min" value="5" min="0.5" max="180" step="0.5"> min</label>
+      <label style="margin:0">Puissance&nbsp;: <input type="number" id="nv-pct" value="75" min="20" max="200"> % du FTP</label>
+      <button id="btn-ajout">Ajouter l’intervalle</button>
+    </div>
+    <div class="info" id="duree-seance"></div>
+    <div class="info" id="etat-seance"></div>
+    <canvas id="profil-seance" class="court" style="margin-top:10px" aria-label="Profil de la séance structurée"></canvas>
+  </section>
+
+  <section class="carte hors-course">
+    <h2>Séance en cours</h2>
+    <div class="grille-stats" id="tuiles-live"></div>
+    <div class="zones" id="zones-live"></div>
+    <h2>Meilleures puissances et FTP</h2>
+    <div id="bilan-live"></div>
+    <h2>Puissance, fréquence cardiaque, cadence et altitude</h2>
+    <canvas id="graphique" class="haut" aria-label="Graphique de la séance"></canvas>
+    <div class="legende-graph">Puissance en jaune, fréquence cardiaque en vert, cadence en bleu, altitude en gris.</div>
+  </section>
+
+  </div>
+
+  <div id="onglet-world">
+    <section id="world-choix">
+      <div class="accueil-fond" id="accueil-fond" aria-hidden="true"></div>
+      <!-- (v70) maquette B : le monde choisi au centre (nom, chiffres, profil), les modes en pastilles, les réglages dans « Options », la liste des mondes à droite -->
+      <div class="accueil-panneau">
+        <div class="am-sur">Ton parcours</div>
+        <h1 class="accueil-titre" id="am-nom"></h1>
+        <div class="am-chiffres" id="am-chiffres"></div>
+        <canvas class="am-profil" id="am-profil" aria-hidden="true"></canvas>
+        <div class="am-sur">Type de sortie</div>
+        <div class="modes" role="radiogroup" aria-label="Type de sortie">
+          <button type="button" class="mode" role="radio" data-mode="aucun"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="16" r="4"/><circle cx="18" cy="16" r="4"/><path d="M6 16l4-7h6l2 7M10 9l3 7 3-7"/></svg><b>Sortie libre</b><span>Seul, à ton rythme</span></button>
+          <button type="button" class="mode" role="radio" data-mode="z2"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M3 20c.8-3.5 2.8-5 5-5s4.2 1.5 5 5M11 20c.8-3.5 2.8-5 5-5s4.2 1.5 5 5"/></svg><b>Endurance</b><span>En groupe, 40–60&nbsp;% FTP</span></button>
+          <button type="button" class="mode" role="radio" data-mode="fantome"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg><b>Mon record</b><span>Contre ton fantôme</span></button>
+          <button type="button" class="mode" role="radio" data-mode="course"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4M5 4h13l-3 4 3 4H5"/></svg><b>Course</b><span>Contre l’IA</span></button>
+          <button type="button" class="mode" role="radio" data-mode="clm"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 13l4-4M10 2h4M19 5l1.5-1.5"/></svg><b>Contre-la-montre</b><span>Seul contre le chrono</span></button>
+          <button type="button" class="mode" role="radio" data-mode="tour"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M6 20V9l6-5 6 5v11M10 20v-5h4v5"/></svg><b>Tour à étapes</b><span>Maillots jaune et à pois</span></button>
+        </div>
+        <select id="peloton-mode" hidden><option value="aucun" selected>Aucun (balade en solitaire)</option><option value="z2">Sortie endurance</option><option value="course">Course : classement, tant que tu roules</option><option value="fantome">Contre mon record (fantôme)</option><option value="clm">Contre-la-montre</option><option value="tour">Tour à étapes</option></select>
+        <div class="tour-panneau" id="tour-panneau" hidden></div>
+        <details class="accueil-options" id="accueil-options">
+          <summary><b>Options</b><span id="options-resume"></span></summary>
+          <div class="ao-corps">
+            <div class="options-ia" id="options-ia">
+              <label>Niveau des autres cyclistes&nbsp;: <select id="peloton-niveau"><option value="facile">Facile (de −5 à −2&nbsp;% de watts/kg)</option><option value="equilibre" selected>Équilibré (±2,5&nbsp;%)</option><option value="expert">Expert (de +2 à +5&nbsp;% de watts/kg)</option></select></label>
+              <label>Nombre d’autres coureurs&nbsp;: <select id="peloton-nombre"><option value="4">4 coureurs</option><option value="5">5 coureurs</option><option value="6">6 coureurs</option><option value="7">7 coureurs</option><option value="8" selected>8 coureurs</option><option value="9">9 coureurs</option><option value="10">10 coureurs</option><option value="11">11 coureurs</option><option value="12">12 coureurs</option></select></label>
+              <label class="case" id="choix-echauffement"><input type="checkbox" id="echauffement"> Échauffement de 10 min avant le départ (mode ERG, la course part ensuite)</label>
+              <label id="choix-tours">Arrivée&nbsp;: <select id="peloton-tours"><option value="0">Sans arrivée (tant que tu roules)</option><option value="1">1 tour</option><option value="2">2 tours</option><option value="3" selected>3 tours</option><option value="4">4 tours</option><option value="5">5 tours</option><option value="6">6 tours</option><option value="7">7 tours</option><option value="8">8 tours</option><option value="9">9 tours</option><option value="10">10 tours</option><option value="11">11 tours</option><option value="12">12 tours</option><option value="13">13 tours</option><option value="14">14 tours</option><option value="15">15 tours</option><option value="16">16 tours</option><option value="17">17 tours</option><option value="18">18 tours</option><option value="19">19 tours</option><option value="20">20 tours</option></select></label>
+              <div class="info" id="info-clm" hidden>Contre-la-montre : départs toutes les 30 secondes, la moitié des coureurs partent avant toi (tu peux les rattraper), les autres après. Pas d’aspiration : chacun roule seul. L’écart avec chacun est donné à chaque point de chrono (tous les 100 m).</div>
+              <div class="info" id="info-ia">D’autres coureurs t’accompagnent : grimpeurs, sprinteurs, baroudeurs et puncheurs, chacun avec son nom, son maillot et son allure, tirés au hasard à chaque sortie. Leur force part de ton FTP rapporté au poids (watts/kg), avec chacun sa réserve d’énergie et sa fatigue.</div>
+            </div>
+            <label id="choix-seance">Séance ERG&nbsp;: <select id="seance-monde"><option value="">Aucune (résistance d’après la pente)</option></select></label>
+            <div class="barre-seance"><button type="button" id="btn-import-accueil" class="petit">Importer une séance (.erg, .mrc, .zwo)</button><span class="stats" id="msg-import-a"></span></div>
+            <label id="choix-depart">Départ&nbsp;: <select id="depart-km"><option value="0">Au début du parcours</option></select></label>
+            <label class="case"><input type="checkbox" id="fantome-pr" disabled> Fantôme du record (le tour le plus rapide de ce circuit)</label>
+            <label class="case"><input type="checkbox" id="fantome-seg" checked> Fantôme de mon record sur les segments chronométrés (cycliste doré)</label>
+            <div class="stats" id="fantome-info"></div>
+          </div>
+</details>
+<!-- (v71) sortie de groupe : rouler en direct avec des amis (js/groupe.js) -->
+<details class="accueil-options accueil-groupe" id="accueil-groupe">
+  <summary><b>Rouler avec des amis</b><span id="groupe-resume"></span></summary>
+  <div class="ao-corps">
+    <label>Ton nom dans le groupe&nbsp;: <input type="text" id="groupe-nom" maxlength="18" placeholder="Cycliste"></label>
+    <div id="groupe-hors">
+      <button type="button" class="plein" id="btn-groupe-creer">Créer un groupe</button>
+      <div class="groupe-rejoindre"><input type="text" id="groupe-code-in" maxlength="6" placeholder="Code" autocomplete="off" aria-label="Code du groupe"><button type="button" id="btn-groupe-rejoindre">Rejoindre</button></div>
+      <div class="info">Chacun roule chez soi, sur le même monde : vous vous voyez en 3D, avec les écarts, et vous pouvez profiter de l’aspiration. Il faut une connexion Internet.</div>
+    </div>
+    <div id="groupe-dans" hidden>
+      <div class="groupe-code">Code <b id="groupe-code"></b></div>
+      <div class="info" id="groupe-role"></div>
+      <div id="groupe-membres"></div>
+      <button type="button" id="btn-groupe-quitter">Quitter le groupe</button>
+    </div>
+    <div class="info alerte-groupe" id="groupe-msg" hidden></div>
+  </div>
+</details>
+      </div>
+      <div class="accueil-droite">
+        <button type="button" class="accueil-prog" id="accueil-prog" title="Progression, défis et badges"></button>
+        <div class="accueil-mondes">
+          <div class="panneau-titre">Mondes</div>
+          <div class="grille-mondes" id="tuiles-mondes"></div>
+          <button id="btn-nouveau-monde" class="nouveau-monde" title="Un monde numérisé suit exactement ton tracé GPX : le décor (routes, bâtiments, bois, eau) est téléchargé depuis OpenStreetMap et le relief depuis l’IGN, puis gardé dans ton navigateur. Chaque monde a ses segments chronométrés (sprints, montées, secteurs) : tes records et ta progression sont gardés dans ce navigateur. Tu peux aussi déposer le fichier GPX sur cette page.">＋ Nouveau monde (fichier GPX)</button><input type="file" id="fichier-monde-gpx" accept=".gpx,application/gpx+xml" hidden>
+          <div class="info" id="msg-monde" aria-live="polite"></div>
+        </div>
+        <div class="accueil-depart">
+          <div class="accueil-resume"><b id="resume-choix-titre"></b><span id="resume-choix-detail"></span></div>
+          <button type="button" class="plein cest-parti" id="btn-cest-parti">C’est parti <span aria-hidden="true">▶</span></button>
+        </div>
+      </div>
+    </section>
+    <section class="carte" id="world-jeu" hidden>
+      <div class="monde" id="monde-conteneur">
+        <div id="flash-photo" aria-hidden="true"></div>
+        <canvas id="monde3d" aria-label="Monde virtuel en 3D"></canvas>
+        <div id="aide-clavier" hidden></div>
+        <div class="hud-zone" id="hud-zone">
+        <div class="hz" id="hz-haut"><div class="carte-b"><div class="ligne">
+          <div class="it"><span class="v" id="hz-vit">0</span><span class="u">km/h</span><span class="frein" id="hz-frein" hidden>freins</span></div>
+          <div class="it"><span class="v" id="hz-dist">0,0</span><span class="u">km</span></div>
+          <div class="it"><span class="v" id="hz-deniv">0</span><span class="u">m D+</span></div>
+          <div class="it"><span class="v" id="hz-temps">0:00</span></div>
+          <div class="it it-reste" id="hz-reste-b" hidden><span class="v" id="hz-reste">0,0</span><span class="u" id="hz-reste-u">km restants</span></div>
+        </div>
+        <div id="hz-prog"><i id="hz-progres"></i></div></div></div>
+        <div class="hz" id="hz-gauche">
+        <div class="hz" id="hz-effort"><div class="carte-b" id="hz-puiss">
+          <div class="eff-w"><span class="w" id="hz-w">–</span><span class="w-u">W</span><span class="eff-zone" id="hz-zone"></span></div>
+          <div class="eff-barre" aria-hidden="true"><i id="hz-pbar"></i><s></s></div>
+          <div class="eff-wkg"><b id="hz-wkg">–</b> W/kg</div>
+          <canvas id="hz-spark" width="300" height="56" aria-hidden="true"></canvas>
+          <div class="eff-sec"><span><i class="ic-fc">&#9829;</i><b id="hz-fc">–</b><small>bpm</small></span><span><i class="ic-cad">&#8635;</i><b id="hz-cad">–</b><small>rpm</small></span></div>
+          <div class="cible" id="hz-cible"></div>
+        </div></div>
+        <div class="hz" id="hz-peloton" hidden><div class="carte-b" id="hz-peloton-c"></div></div>
+        <div class="hz" id="hz-groupe" hidden><div class="carte-b" id="hz-groupe-c"></div></div>
+        <div class="hz" id="hz-tours" hidden><div class="carte-b" id="hz-tours-c"></div></div>
+        <div class="hz" id="hz-meteo" style="display:none"><div class="carte-b hz-ville"><span id="hz-meteo-t"></span></div></div>
+        <div class="carte-b" id="hz-seance" hidden></div>
+        </div>
+        <div class="hz" id="hz-droite">
+        <div class="hz" id="hz-pente-g"><div class="carte-b"><span class="pente-l">Pente</span><span id="hz-pente">0,0&nbsp;%</span><span id="hz-pente-av"></span></div></div>
+        <div class="hz" id="hz-aero"><div class="carte-b"><div class="aero-l"><canvas id="hz-vent-c" width="132" height="132"></canvas><div><div class="aero-w" id="hz-aero-w">+0 W</div><div class="aero-s">gain aéro</div></div></div><div class="aero-v" id="hz-vent-t">vent faible</div></div></div>
+        <div class="hz" id="hz-carte"><div class="carte-b"><canvas id="hz-carte-c" width="240" height="220"></canvas></div></div>
+        </div>
+        <div class="hz" id="hz-profil"><div class="carte-b" style="position:absolute;inset:0;padding:.3em .5em"><canvas id="hz-profil-c" width="1200" height="150"></canvas></div></div>
+        <div class="hz" id="hz-annonce" hidden></div>
+        <div class="hz" id="hz-segment" hidden><div class="carte-b" id="hz-segment-c"></div></div>
+        <div class="hz" id="hz-cmd"><button class="btn-balade-x">Démarrer la balade</button><button class="btn-terminer-x">Terminer et enregistrer</button><button id="btn-quitter-fs">Quitter le plein écran</button></div>
+        </div>
+        <div class="revoir-barre" id="revoir-barre" hidden>
+          <b>Revoir</b><button type="button" id="revoir-lecture" title="Lecture / pause (Espace)">⏸</button>
+          <span class="revoir-vit"><button type="button" data-x="1">×1</button><button type="button" data-x="4">×4</button><button type="button" data-x="16">×16</button><button type="button" data-x="60">×60</button></span>
+          <input type="range" id="revoir-pos" min="0" max="1000" value="0" aria-label="Moment de la sortie"><span id="revoir-t">0:00</span>
+          <button type="button" id="revoir-quitter" class="plein">Quitter</button>
+        </div>
+        <div class="monde-msg" id="monde-msg" hidden></div>
+        <div id="world-intro"><div class="titre"><div id="intro-nom"></div><div class="sous" id="intro-sous"></div></div></div>
+      </div>
+      <div class="barre barre-jeu">
+        <button id="btn-changer-monde" title="Revenir au choix du monde">&larr; Mondes</button><strong id="nom-monde-actif"></strong><span id="etat-decor"></span>
+        <span class="sep-jeu" aria-hidden="true"></span>
+        <button class="plein btn-balade-x">Démarrer la balade</button>
+        <button id="btn-plein-ecran">Plein écran</button>
+        <button type="button" id="btn-photo" title="Prendre une photo de la sortie (touche P)">📷 Photo</button>
+        <button class="btn-terminer-x" id="btn-terminer-world">Terminer et enregistrer</button>
+        <button class="btn-abandon-x">Abandonner</button>
+        <button type="button" class="petit" id="btn-aide-clavier" title="Commandes au clavier (touche K)">⌨</button>
+        <button type="button" class="petit" id="btn-ecran2" title="Ouvrir un tableau de bord dans une deuxième fenêtre (autre écran, télé…)">🖥 2e écran</button>
+        <label class="choix-camera" title="Touche V pour changer de caméra">Caméra&nbsp;: <select id="vue-camera">
+          <option value="arriere" selected>Derrière</option>
+          <option value="trois">Côté (3/4)</option>
+          <option value="face">Face</option>
+          <option value="large">Large</option>
+          <option value="action">Action cam (torse)</option>
+          <option value="tv">Télévision (plans automatiques)</option>
+        </select></label>
+        <span class="stats" id="stats-world"></span>
+        <!-- le décor est celui du monde choisi (plus de choix) : liste gardée cachée pour le programme -->
+        <input type="checkbox" id="affiche-3d" checked hidden>
+        <select id="monde" hidden>
+          <option value="campagne">Campagne et collines</option>
+          <option value="montagne">Montagne</option>
+          <option value="mer">Bord de mer</option>
+          <option value="desert">Désert</option>
+          <option value="ardennes">Forêt des Ardennes</option>
+          <option value="toscane">Collines de Toscane</option>
+          <option value="ville">Ville de nuit</option>
+          <option value="kona">Île volcanique (Kona)</option>
+          <option value="lanzarote">Île volcanique (Lanzarote)</option>
+        </select>
+      </div>
+      <div class="info" id="msg-fin"></div>
+      <div class="barre" style="display:none">
+      </div>
+      <div class="stats astuce-monde">Barre d’espace : pause ou reprise · touche V : caméra suivante · si l’animation saccade, baisse la qualité dans l’onglet Paramètres.</div>
+    </section>
+  </div>
+
+  <div id="onglet-perso" hidden>
+    <section class="carte">
+      <h2>Personnalisation</h2>
+      <div class="sous-onglets" role="tablist" aria-label="Personnalisation"><button type="button" role="tab" id="perso-tab-avatar" aria-selected="true">Avatar</button><button type="button" role="tab" id="perso-tab-velo" aria-selected="false">Vélo</button></div>
+      <div class="perso-grille">
+        <div class="perso-apercu"><canvas id="apercu-3d" hidden aria-label="Aperçu 3D de l’avatar"></canvas><div id="apercu-avatar" aria-label="Aperçu de l’avatar"></div><div class="stats" id="apercu-legende">Aperçu 3D de ton coureur : fais-le tourner en le faisant glisser avec la souris.</div></div>
+        <div class="reglages perso-reglages" id="perso-avatar">
+          <fieldset>
+            <legend>Silhouette</legend>
+            <label>Modèle&nbsp;: <select id="sexe"><option value="homme" selected>Homme</option><option value="femme">Femme</option></select></label>
+          </fieldset>
+          <fieldset>
+            <legend>Couleur de peau</legend>
+            <div class="pastilles" id="pastilles-peau"></div>
+            <input type="hidden" id="avatar-peau" value="14724226">
+          </fieldset>
+          <fieldset>
+            <legend>Cheveux</legend>
+            <div class="pastilles" id="pastilles-cheveux"></div>
+            <input type="hidden" id="avatar-cheveux" value="3877406">
+            <label>Coiffure&nbsp;: <select id="avatar-coiffure"><option value="court" selected>Courts</option><option value="rase">Coupe très courte (tondeuse)</option><option value="mi-long">Mi-longs</option><option value="degarni">Dégarnis</option><option value="chignon">Chignon</option><option value="queue">Queue de cheval</option><option value="chauve">Crâne rasé</option></select></label>
+            <label>Barbe&nbsp;: <select id="avatar-barbe"><option value="aucune" selected>Aucune</option><option value="courte">Barbe de 3 jours</option><option value="bouc">Bouc</option><option value="moustache">Moustache</option><option value="complete">Barbe complète</option></select></label>
+          </fieldset>
+          <fieldset>
+            <legend>Tenue</legend>
+            <label>Maillot&nbsp;: <select id="avatar-maillot">
+              <option value="16744495" selected>Orange</option>
+              <option value="3112191">Bleu</option>
+              <option value="4177754">Vert</option>
+              <option value="15022395">Rouge</option>
+              <option value="9064447">Violet</option>
+              <option value="16736162">Rose</option>
+              <option value="16765503">Jaune</option>
+              <option value="15856629">Blanc</option>
+              <option value="2899536">Noir</option>
+            </select></label>
+            <label>Bas&nbsp;: <select id="avatar-bas-style"><option value="cuissard" selected>Cuissard (jambes nues)</option><option value="long">Collant long</option></select></label>
+            <label>Couleur du bas&nbsp;: <select id="avatar-bas">
+              <option value="1851174" selected>Noir</option>
+              <option value="2042957">Bleu marine</option>
+              <option value="14239551">Rouge</option>
+              <option value="5857387">Gris</option>
+              <option value="3112282">Vert sapin</option>
+              <option value="9064447">Violet</option>
+            </select></label>
+            <label>Chaussettes&nbsp;: <select id="avatar-chaussettes"><option value="15922422" selected>Blanches</option><option value="1851174">Noires</option><option value="16744495">Orange</option><option value="3112191">Bleues</option><option value="15022395">Rouges</option><option value="4177754">Vertes</option><option value="16765503">Jaunes</option><option value="16736162">Roses</option><option value="10133929">Grises</option></select></label>
+            <label>Couleur des yeux&nbsp;: <select id="avatar-yeux"><option value="marron" selected>Marron</option><option value="noisette">Noisette</option><option value="vert">Verts</option><option value="bleu">Bleus</option><option value="gris">Gris</option><option value="noir">Noirs</option></select></label>
+            <label><input type="checkbox" id="avatar-casque"> Casque</label>
+            <label><input type="checkbox" id="avatar-lunettes"> Lunettes de soleil</label>
+            <label>Couleur du casque&nbsp;: <select id="avatar-casque-couleur"><option value="15922422" selected>Blanc</option><option value="2764083">Noir</option><option value="10133929">Gris</option><option value="14169135">Rouge</option><option value="3108824">Bleu</option><option value="15262266">Jaune fluo</option></select></label>
+            <label>Verres des lunettes&nbsp;: <select id="avatar-verres"><option value="orange" selected>Miroir orange</option><option value="bleu">Miroir bleu</option><option value="violet">Miroir violet</option><option value="fume">Fumés</option></select></label>
+            <input type="checkbox" id="avatar-realiste" checked hidden>
+          </fieldset>
+        </div>
+        <div class="reglages perso-reglages" id="perso-velo" hidden>
+          <fieldset>
+            <legend>Vélo</legend>
+            <label>Vélo&nbsp;: <select id="avatar-velo">
+              <optgroup label="Route">
+              <option value="mystero" selected>CBT Italia Mystero (bleu-vert)</option>
+              <option value="v5rs">Colnago V5Rs (UAE)</option>
+              <option value="y1rs">Colnago Y1Rs (champion du monde)</option>
+              <option value="melee">Enve Melee (noir)</option>
+              <option value="dogma">Pinarello Dogma F (rouge)</option>
+              <option value="foil">Scott Foil RC (gris)</option>
+              <option value="madone">Trek Madone SLR (blanc)</option>
+              <option value="simple">Vélo simple</option>
+              </optgroup>
+              <optgroup label="Contre-la-montre">
+              <option value="plasma">Scott Plasma RC (blanc et vert)</option>
+              <option value="speed">Trek Speed Concept SLR (violet)</option>
+              <option value="triton">Ridley Triton Fast (noir et cuivre)</option>
+              <option value="tritonb">Ridley Triton Fast (bleu clair)</option>
+              </optgroup>
+            </select></label>
+            <label>Roues&nbsp;: <select id="avatar-roues">
+              <option value="35">35 mm</option>
+              <option value="45">45 mm</option>
+              <option value="50" selected>50 mm</option>
+              <option value="65">65 mm</option>
+              <option value="disque">Lenticulaire</option>
+            </select></label>
+            <div id="fiche-velo" class="fiche-velo"></div>
+          </fieldset>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="onglet-parametres" hidden>
+    <section class="carte">
+      <h2>Paramètres</h2>
+      <div class="reglages">
+        <fieldset>
+          <legend>Coureur</legend>
+          <label>Âge&nbsp;: <input type="number" id="age" value="35" min="10" max="99"> ans</label>
+          <label>Taille&nbsp;: <input type="number" id="taille" value="175" min="120" max="220"> cm</label>
+          <label>Poids&nbsp;: <input type="number" id="poids" value="75" min="40" max="150"> kg</label>
+          <label>FTP&nbsp;: <input type="number" id="ftp" value="200" min="50" max="600"> W</label>
+          <label>FC max&nbsp;: <input type="number" id="fcmax" value="190" min="120" max="220"> bpm</label>
+          <button id="btn-fcmax-estime" class="petit">Estimer la FC max avec mon âge</button>
+          <label><input type="checkbox" id="zones-fc-auto" checked> Zones de FC calculées d’après mes séances</label>
+          <div class="stats" id="info-zones-fc"></div>
+          <div class="stats">Le poids sert au calcul de la vitesse et des calories ; le FTP et la FC max définissent tes zones.</div>
+        </fieldset>
+        <fieldset>
+          <legend>Graphisme</legend>
+          <label>Qualité&nbsp;: <select id="qualite">
+            <option value="haute">Élevée</option>
+            <option value="normale" selected>Normale</option>
+            <option value="legere">Légère</option>
+          </select></label>
+          <label hidden>Moment de la journée&nbsp;: <select id="moment"><option value="jour" selected>Journée</option><option value="matin">Matin</option><option value="soir">Soir (couchant)</option></select></label>
+          <label hidden>Météo&nbsp;: <select id="meteo"><option value="auto" selected>Aléatoire (change au fil de la balade)</option><option value="clair">Dégagé</option><option value="nuageux">Nuageux</option><option value="brume">Brouillard</option><option value="orage">Orage</option></select></label>
+          <label hidden>Saison&nbsp;: <select id="saison"><option value="printemps">Printemps</option><option value="ete" selected>Été</option><option value="automne">Automne</option><option value="hiver">Hiver</option></select></label>
+          <label hidden>Piétons (mondes urbains)&nbsp;: <select id="pietons"><option value="2">Beaucoup</option><option value="1" selected>Quelques-uns</option><option value="0">Aucun</option></select></label>
+          <label>Supporters au bord de la route&nbsp;: <select id="foule"><option value="2" selected>Beaucoup</option><option value="1">Quelques-uns</option><option value="0">Aucun</option></select></label>
+          <label>Résolution&nbsp;: <select id="resolution">
+            <option value="1440">2K (1440p)</option>
+            <option value="1080">Full HD (1080p)</option>
+            <option value="0" selected>Automatique (taille de l’écran)</option>
+          </select></label>
+          <div class="stats">Si l’animation saccade, choisis « Full HD » et/ou la qualité « Légère ».</div>
+        </fieldset>
+        <fieldset hidden>   <!-- (v72) toujours actif, plus affiché -->
+          <legend>Aérodynamisme et vent</legend>
+          <label><input type="checkbox" id="vent-actif" checked> Vent (force et direction selon la météo du monde)</label>
+          <label>Matériel aéro&nbsp;: <select id="materiel-aero"><option value="0" selected>Standard</option><option value="0.05">Casque et roues aéro (−5&nbsp;% d’air)</option><option value="0.09">Équipement complet (−9&nbsp;% d’air)</option></select></label>
+          <div class="stats">Position aux cocottes (0,34&nbsp;m²). Le vent compte pour 60&nbsp;% de sa force météo (moins entre les maisons) ; derrière un autre cycliste, tu économises jusqu’à 32&nbsp;% d’air (entre 0,4 et 8&nbsp;m, bien aligné). L’air s’allège de 2&nbsp;% tous les 160&nbsp;m de montée, la pluie ajoute 12&nbsp;% de résistance au roulement. Ces règles valent pour tous les mondes.</div>
+        </fieldset>
+        <fieldset>
+          <legend>Sensations de route</legend>
+          <label hidden><input type="checkbox" id="freinage" checked> Freiner avant les virages serrés (descentes, épingles, critérium)</label>
+          <label><input type="checkbox" id="vibrations" checked> Vibrations de l’image sur les pavés et les chemins</label>
+          <label><input type="checkbox" id="ravito" checked> Rappels pour boire (toutes les 15 min) et manger (à partir de 40 min)</label>
+          <div class="stats">Sur les pavés (±1,2 % de pente) et le gravier (±0,5 %), la résistance du home trainer varie toujours un peu ; cette case ne règle que les secousses de l’image.</div>
+        </fieldset>
+        <fieldset>
+          <legend>Effets et son</legend>
+          <label><input type="checkbox" id="poussiere" checked> Poussière derrière la roue</label>
+          <label><input type="checkbox" id="son-actif" checked> Son (roue, vent, roue libre)</label>
+          <label>Volume&nbsp;: <input type="range" id="son-volume" min="0" max="100" step="5" value="50"></label>
+        </fieldset>
+        <fieldset>
+          <legend>Réglage du HUD</legend>
+          <label>Taille des encarts&nbsp;: <input type="range" id="hud-taille" min="60" max="150" step="5" value="100"> <span id="hud-taille-v">100&nbsp;%</span></label>
+        </fieldset>
+        <fieldset>
+          <legend>Confort</legend>
+          <label><input type="checkbox" id="auto-depart" checked> Démarrer la balade automatiquement dès que je pédale</label>
+          <label><input type="checkbox" id="auto-pause" checked> Pause automatique quand j’arrête de pédaler (après roue libre)</label>
+          <div class="stats">La balade reprend toute seule dès que tu repédales.</div>
+        </fieldset>
+      </div>
+    </section>
+    <section class="carte">
+      <h2>Sauvegarde de mes données</h2>
+      <p class="info" style="margin-top:0">Tes séances, ta progression, tes records, tes réglages et tes séances importées ne sont gardés que dans ce navigateur. Fais une sauvegarde de temps en temps (ou avant de changer d’ordinateur) : c’est un seul fichier, que tu pourras restaurer ici.</p>
+      <label class="case"><input type="checkbox" id="sauve-decor"> Inclure le décor téléchargé des mondes GPX (fichier beaucoup plus gros ; sinon seul le tracé est gardé et le décor sera retéléchargé)</label>
+      <div class="barre">
+        <button id="btn-sauvegarder" class="plein">Télécharger une sauvegarde</button>
+        <label class="bouton">Restaurer une sauvegarde<input type="file" id="fichier-sauvegarde" accept=".json,application/json" hidden></label>
+        <span class="stats" id="msg-sauvegarde" aria-live="polite"></span>
+      </div>
+    </section>
+  </div>
+
+  <div id="resume-fin" hidden><div class="rf-carte" id="resume-fin-c"></div></div>
+  <div id="progression" hidden role="dialog" aria-modal="true" aria-label="Progression"><div class="pg-carte" id="progression-c"></div></div>
+
+  <div id="onglet-historique" hidden>
+    <section class="carte">
+      <h2>Bilan de la semaine et du mois</h2>
+      <div class="bilans" id="bilans"></div>
+      <canvas id="graph-mois" class="court" aria-label="Distance de chaque mois"></canvas>
+      <div class="legende-graph">Distance roulée chaque mois (12 derniers mois) ; le mois en cours en orange.</div>
+    </section>
+
+    <section class="carte">
+      <h2>Courbe de puissance</h2>
+      <div class="barre" style="margin-top:0"><label>Période&nbsp;: <select id="courbe-periode"><option value="42">6 dernières semaines</option><option value="90" selected>3 derniers mois</option><option value="365">12 derniers mois</option><option value="0">Depuis le début</option></select></label><span class="stats" id="courbe-etat"></span></div>
+      <div class="grille-stats" id="tuiles-courbe"></div>
+      <canvas id="graph-courbe" class="haut" aria-label="Courbe de puissance"></canvas>
+      <div class="legende-graph">Ta meilleure puissance moyenne pour chaque durée (de 1 s à 2 h) : en orange sur la période choisie, en gris depuis le début. La ligne pointillée est ton FTP.</div>
+      <div class="info" id="texte-courbe"></div>
+    </section>
+
+    <section class="carte">
+      <h2>Cumul de toutes les séances</h2>
+      <div class="info" id="etat-stockage" style="margin-top:0;margin-bottom:12px"></div>
+      <div class="grille-stats" id="tuiles-total"></div>
+      <div class="zones" id="zones-total"></div>
+    </section>
+
+    <section class="carte">
+      <h2>Séances enregistrées</h2>
+      <div class="defile">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th><th>Durée</th><th>Distance (km)</th><th>Dénivelé (m)</th><th>Vitesse moy. (km/h)</th>
+              <th>Calories (kcal)</th><th>Cadence moy. / max</th><th>Puissance moy. / max (W)</th>
+              <th>Puiss. normalisée (W)</th><th>FC moy. / max</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="corps-hist"></tbody>
+        </table>
+      </div>
+      <div id="detail-seance" hidden>
+        <h2 id="detail-titre"></h2>
+        <div class="grille-stats" id="detail-tuiles"></div>
+        <h2>Temps passé dans chaque zone</h2>
+        <div class="zones" id="detail-zones"></div>
+        <h2>Meilleures puissances et FTP</h2>
+        <div id="detail-bilan"></div>
+        <h2>Puissance, fréquence cardiaque, cadence et altitude</h2>
+        <canvas id="detail-graphique" class="haut" aria-label="Graphique de la séance sélectionnée"></canvas>
+        <div class="legende-graph">Puissance en jaune, fréquence cardiaque en vert, cadence en bleu, altitude en gris.</div>
+        <div class="barre">
+          <button class="plein" id="btn-detail-fit">Exporter en .FIT</button>
+          <button id="btn-detail-revoir" hidden>Revoir la sortie en 3D</button>
+          <button id="btn-detail-suppr">Supprimer cette séance</button>
+          <button id="btn-detail-fermer">Fermer</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<script src="js/outils.js"></script>
+<script src="js/parcours-physique.js"></script>
+<script src="js/seance.js"></script>
+<script src="js/historique-interface.js"></script>
+<script src="js/analyse.js"></script>
+<script src="js/createur-seance.js"></script>
+<script src="js/modele-3d.js"></script>
+<script src="js/modele-homme.js"></script>
+<script src="js/modele-femme.js"></script>
+<script src="js/textures-corps.js"></script>
+<script src="js/velos.js"></script>
+<script src="js/decor.js"></script>
+<script src="js/monde3d.js"></script>
+<script src="js/boucle-hud-son.js"></script>
+<script src="js/progression.js"></script>
+<script src="js/tour.js"></script>
+<script src="js/revoir-ecran2.js"></script>
+<script src="js/mondes.js"></script>
+<script src="js/demarrage.js"></script>
+<script src="js/accueil.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="js/groupe.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+<script src="js/photos.js"></script>
+</body>
+</html>
