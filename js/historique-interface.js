@@ -255,6 +255,7 @@ function reinitialiserSeance() {
   balade.enCours = false; balade.auto = false; balade.immobile = 0;
   balade.distance = balade.d0 || 0; balade.vitesse = 0; balade.temps = 0; balade.altitude = balade.d0 ? altitudeA(balade.d0) : route.alt0;   // (v69 suite) on repart du point de départ choisi
   session.samples = []; session.debut = null; session.dernierEnreg = 0; session.pause = 0; seance.t0 = 0;
+  annulerEchauffement();                                         // (v74) un échauffement abandonné ne traîne pas jusqu'à la sortie suivante
   if (typeof remettreRavito === "function") remettreRavito();
   if (typeof Tour !== "undefined") Tour.quitterEtape();          // (v69 suite) une étape de Tour non terminée devra être recourue
   if (typeof Progression !== "undefined") { Progression.oublierSortie(); Progression.majAccueil(); }

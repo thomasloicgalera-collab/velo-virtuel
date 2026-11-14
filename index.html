@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vélo virtuel</title>
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icones/icone-192.png">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<meta name="theme-color" content="#0d131c">
 </head>
 <body>
 <header class="barre-app">
@@ -508,6 +512,11 @@
         </fieldset>
       </div>
     </section>
+    <section class="carte" id="carte-installer">
+      <h2>Installer l’application</h2>
+      <p class="info" style="margin-top:0" id="installer-texte">Ouvre le Vélo virtuel comme un vrai logiciel (sa propre fenêtre, une icône sur le bureau, démarrage sans Internet). Fonctionne avec Chrome ou Edge sur Windows, Mac, Linux et Chromebook, depuis l’adresse en ligne du site.</p>
+      <div class="barre"><button id="btn-installer" class="plein" hidden>Installer l’application</button><span class="stats" id="msg-installer" aria-live="polite"></span></div>
+    </section>
     <section class="carte">
       <h2>Sauvegarde de mes données</h2>
       <p class="info" style="margin-top:0">Tes séances, ta progression, tes records, tes réglages et tes séances importées ne sont gardés que dans ce navigateur. Fais une sauvegarde de temps en temps (ou avant de changer d’ordinateur) : c’est un seul fichier, que tu pourras restaurer ici.</p>
@@ -609,5 +618,11 @@
 <script src="js/groupe.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
 <script src="js/photos.js"></script>
+<script>
+/* (v75) installation comme un logiciel : service worker (hors ligne) et bouton « Installer l'application » (seulement en https ou localhost) */
+if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(function () {});
+window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); window.__installer = e; var b = document.getElementById("btn-installer"); if (b) b.hidden = false; });
+window.addEventListener("appinstalled", function () { window.__installer = null; var b = document.getElementById("btn-installer"); if (b) b.hidden = true; });
+</script>
 </body>
 </html>

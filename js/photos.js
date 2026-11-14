@@ -84,3 +84,20 @@ const Photos = (function () {
   $("btn-photo").addEventListener("click", prendre);
   return { prendre, apresDessin, pour, nouvelleEntree, htmlResume, brancherResume, nombre: () => liste.length };
 })();
+
+/* (v75) Installation de l'application (PWA) : le bouton n'apparaît que quand le navigateur propose l'installation */
+(function () {
+  const b = $("btn-installer"), msg = $("msg-installer"), t = $("installer-texte");
+  const installee = window.matchMedia("(display-mode: standalone)").matches || window.matchMedia("(display-mode: window-controls-overlay)").matches;
+  if (installee) { t.textContent = "Tu utilises déjà l’application installée."; return; }
+  if (location.protocol === "file:") t.textContent = "L’installation n’est possible que depuis l’adresse en ligne du site (pas depuis un fichier ouvert directement sur l’ordinateur).";
+  if (window.__installer) b.hidden = false;
+  b.addEventListener("click", async () => {
+    const e = window.__installer;
+    if (!e) return;
+    e.prompt();
+    const r = await e.userChoice;
+    msg.textContent = r.outcome === "accepted" ? "Installation en cours : l’application s’ouvre dans sa propre fenêtre." : "Installation annulée.";
+    window.__installer = null; b.hidden = true;
+  });
+})();

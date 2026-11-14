@@ -186,19 +186,36 @@ function puissancePourFc(cur, depart) {
 // (v69 suite) échauffement avant la course : 10 min progressives en ERG, les autres coureurs attendent ; à la fin, départ de la course
 const ECHAUFFEMENT = [[4, 45, 60], [3, 65, 75], [1, 90], [2, 55]];
 function lancerEchauffement() {
+  // (v74) la séance chargée par l'utilisateur est mise de côté, et rendue à la fin de l'échauffement (ou s'il est abandonné)
+  const avant = seance.avantEchauf || { intervalles: seance.intervalles, nom: seance.nom, textes: seance.textes };
   chargerSeance(ECHAUFFEMENT, true, "Échauffement", [[2, "Échauffement : 10 min, puis départ de la course", 6], [420, "Une minute à 90 % pour réveiller les jambes", 6], [540, "Départ de la course dans 1 minute !", 6]]);
-  seance.puisCourse = true;
+  seance.puisCourse = true; seance.avantEchauf = avant;
 }
 const echauffementEnCours = () => !!seance.puisCourse && modeActuel() === "erg";
+function rendreSeanceAvantEchauffement() {
+  const a = seance.avantEchauf;
+  if (!a) return;
+  seance.avantEchauf = null;
+  seance.intervalles = a.intervalles; seance.nom = a.nom || ""; seance.textes = a.textes || []; seance.texteI = 0;
+  sauverReglages(); rendreSeance();
+}
+// (v74) échauffement abandonné (sortie abandonnée ou jamais commencée) : plus d'échauffement en attente, retour à la pente du parcours
+function annulerEchauffement() {
+  if (!seance.puisCourse) return;
+  seance.puisCourse = false;
+  if (modeActuel() === "erg") { document.querySelector("input[name=mode][value=route]").checked = true; reinitialiserEnvois(); }
+  rendreSeanceAvantEchauffement();
+}
 function finEchauffement() {                                   // départ de la course (échauffement fini, passé ou interrompu)
   seance.puisCourse = false;
+  rendreSeanceAvantEchauffement();
   document.querySelector("input[name=mode][value=route]").checked = true; reinitialiserEnvois();
   lancerPeloton();
   if (typeof annoncer === "function") annoncer("Départ de la course !", "Échauffement terminé · bonne course", "arrivee", 6);
   log("Échauffement terminé : départ de la course.");
 }
 function chargerSeance(blocs, activerErg, nom, textes) {
-  etatFc.i = -1; seance.puisCourse = false; seance.k = 1; seance.saute = false;
+  etatFc.i = -1; seance.puisCourse = false; seance.avantEchauf = null; seance.k = 1; seance.saute = false;
   seance.intervalles = Array.isArray(blocs[0]) ? blocsVersIntervalles(blocs) : blocs.map((x) => Object.assign({}, x));
   if (nom !== undefined) { seance.nom = nom || ""; seance.textes = textes || []; }
   seance.texteI = 0;

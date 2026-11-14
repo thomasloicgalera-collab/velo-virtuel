@@ -1146,11 +1146,13 @@ function rendreTuilesMondes() {
     }
     // un clic choisit le monde, un double-clic (ou Entrée sur le monde déjà choisi) le lance directement
     t.addEventListener("click", () => choisirMonde(m.id));
-    t.addEventListener("dblclick", () => entrerMonde(m.id, t));
+    // (v74) même départ que le bouton « C'est parti » : échauffement, séance ERG choisie, étape du Tour
+    const partir = () => { choisirMonde(m.id); $("btn-cest-parti").click(); };
+    t.addEventListener("dblclick", partir);
     t.addEventListener("keydown", (e) => {
       if (e.target !== t || (e.key !== "Enter" && e.key !== " ")) return;
       e.preventDefault();
-      if (m.id === mondeChoisiId) entrerMonde(m.id, t); else choisirMonde(m.id);
+      if (m.id === mondeChoisiId) partir(); else choisirMonde(m.id);
     });
     cont.append(t);
     if (m.synth) dessinerTuileSynth(t.querySelector("canvas"), m); else if (m.route) dessinerTuileGeo(t.querySelector("canvas"), m); else dessinerTuileMonde(t.querySelector("canvas"), m);
@@ -1202,7 +1204,8 @@ function entrerMonde(id, tuile) {
     if (monde3d) monde3d.definirIntro();
     // (v69 suite) sortie mise en pause par « ← Mondes » : elle reprend dès qu'on repédale (comme la pause automatique)
     if (balade.sortiMonde) { balade.sortiMonde = false; if (!balade.enCours && balade.temps > 0) { balade.auto = true; balade.immobile = 0; } }
-    lancerPeloton();
+    // (v74) sortie déjà commencée (retour après « ← Mondes ») : la course continue avec les mêmes coureurs, au même chrono
+    if (session.samples.length) { envoyerPeloton3D(); majHudPeloton(); } else lancerPeloton();
     log("Arrivée dans le monde « " + m.nom + " »" + (Peloton.actif() ? " avec " + Peloton.coureurs().length + " autres cyclistes (" + ($("peloton-mode").value === "course" ? "course" : "sortie Z2") + ")" : "") + ".");
   }, 320);
 }
@@ -1258,6 +1261,7 @@ $("btn-changer-monde").addEventListener("click", async () => {
   if (balade.enCours || balade.auto) { balade.enCours = false; balade.auto = false; balade.sortiMonde = true; majBoutonBalade(); }
   // (v69 suite) moins d'une seconde roulée (aucun échantillon) : on repart de zéro, sinon le départ automatique ne revenait plus
   if (balade.temps > 0 && !session.samples.length) reinitialiserSeance();
+  if (!session.samples.length) annulerEchauffement();          // (v74) échauffement jamais commencé : oublié
   $("world-jeu").hidden = true; $("world-choix").hidden = false;
   rendreTuilesMondes();
 });
