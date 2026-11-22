@@ -12,6 +12,7 @@ const Groupe = (function () {
   const conns = new Map();                           // créateur : id de l'ami → connexion
   const amis = new Map();                            // id → dernier état reçu (+ t = heure de réception)
   let sig3D = "", mondeEnvoye = "", messageEtat = "", jeuAvant = false, meteoSuivie = false;
+  let finGroupe = 0, monFin = null, recEnvoi = 0, recSig = "";   // (v97) arrivée commune : distance d'arrivée imposée par le créateur, mon temps d'arrivée ; envoi de mes temps de la semaine
 
   const nom = () => ($("groupe-nom").value.trim() || "Cycliste").slice(0, 18);
   function tirerCode() { let s = ""; for (let i = 0; i < 5; i++) s += CAR[Math.floor(Math.random() * CAR.length)]; return s; }
@@ -21,7 +22,7 @@ const Groupe = (function () {
     const a = lireApparence(), id = a.velo && a.velo !== "simple" ? a.velo : "madone";
     return { k: "etat", id: monId, nom: nom(), monde: mondeActifId || "", jeu: !$("world-jeu").hidden,
       d: balade.distance, v: balade.enCours ? balade.vitesse : 0, cad: balade.enCours ? balade.cadence || 0 : 0, w: balade.enCours ? Math.round((balade.ratio || 0) * ftp()) : 0,
-      kg: parseFloat($("poids").value) || 75, ratio: balade.ratio || 0.7,
+      kg: parseFloat($("poids").value) || 75, ratio: balade.ratio || 0.7, fin: monFin,
       vent: hote ? [Aero.v.dir, Aero.v.vit] : null,
       meteo: hote && monde3d && monde3d.meteo ? monde3d.meteo().etat : null,   // météo du créateur : la pluie freine (roulement), elle doit être la même pour tous        // le vent du créateur s'impose à tout le groupe (sinon chacun tire le sien : courses inégales)
       couleur: parseInt($("avatar-maillot").value, 10), velo: id, roues: a.roues || "35", clm: !!(Aero.reg && Aero.reg.clm),
@@ -77,7 +78,7 @@ const Groupe = (function () {
   function quitter() {
     if (peer) { try { peer.destroy(); } catch (e) { /* ignoré */ } }
     peer = null; versHote = null; code = ""; hote = false; monId = "";
-    conns.clear(); amis.clear(); mondeEnvoye = ""; messageEtat = "";
+    conns.clear(); amis.clear(); mondeEnvoye = ""; messageEtat = ""; finGroupe = 0; monFin = null;
     if (meteoSuivie && monde3d) monde3d.definirMeteo("auto");   // de nouveau seul : météo aléatoire
     meteoSuivie = false;
     rafraichir3D(); rendre();
@@ -103,9 +104,11 @@ const Groupe = (function () {
       oublier(m.id);
     } else if (m.k === "parti") oublier(m.id);
     else if (m.k === "monde" && !hote) suivreMonde(m);
-    else if (m.k === "depart" && !hote) { suivreMonde(m); partir(m); }
+    else if (m.k === "rec") { if (m.id !== monId && typeof Defis !== "undefined") Defis.recu(m.nom || "Ami", m.recs); if (hote) for (const [id, c] of conns) if (id !== de && c.open) c.send(m); }   // (v97) temps de la semaine d'un ami
+    else if (m.k === "depart" && !hote) { finGroupe = m.fin || 0; monFin = null; suivreMonde(m); partir(m); }
   }
-  const msgDepart = () => ({ k: "depart", monde: mondeActifId, nomMonde: (MONDES.find((x) => x.id === mondeActifId) || {}).nom || "", d0: parseFloat($("depart-km").value) || 0 });
+  const finPourGroupe = () => (Peloton.actif() && Peloton.mode() === "course" && isFinite(Peloton.longueurCourse()) ? Math.round(Peloton.longueurCourse()) : 0);   // (v97) arrivée commune seulement si le créateur roule une course avec arrivée
+  const msgDepart = () => ({ k: "depart", fin: hote ? finPourGroupe() : 0, monde: mondeActifId, nomMonde: (MONDES.find((x) => x.id === mondeActifId) || {}).nom || "", d0: parseFloat($("depart-km").value) || 0 });
   function oublier(id) { if (amis.delete(id)) { rafraichir3D(); rendre(); } }
   function envoyerMonde(force) {
     if (!hote || !connecte()) return;
@@ -139,9 +142,11 @@ const Groupe = (function () {
     envoyerMonde(false);
     // le créateur vient d'entrer dans un monde (« C'est parti ») : tout le groupe part sur le même monde
     const jeu = !$("world-jeu").hidden;
-    if (hote && jeu && !jeuAvant) envoyer(msgDepart());
+    if (hote && jeu && !jeuAvant) { finGroupe = finPourGroupe(); monFin = null; envoyer(msgDepart()); }
     jeuAvant = jeu;
     envoyer(monEtat());
+    // (v97) mes meilleurs temps de la semaine sur les segments, toutes les 10 s (ou dès qu'ils changent)
+    if (typeof Defis !== "undefined" && t - recEnvoi > 10000) { recEnvoi = t; const r = Defis.mesRecs(), sg = JSON.stringify(r); if (r.length) { envoyer({ k: "rec", id: monId, nom: nom(), recs: r }); recSig = sg; } }
     rendre();
   }, PERIODE);
   window.addEventListener("beforeunload", () => { if (connecte()) envoyer({ k: "parti", id: monId }); });
@@ -196,10 +201,19 @@ const Groupe = (function () {
     if (!peer || $("world-jeu").hidden) { bloc.hidden = true; return; }
     bloc.hidden = false;
     const t = performance.now(), moi = { nom: nom() + " (toi)", d: balade.distance, couleur: parseInt($("avatar-maillot").value, 10), w: balade.enCours ? Math.round((balade.ratio || 0) * ftp()) : 0, kg: parseFloat($("poids").value) || 75, moi: true };
-    const tous = [moi, ...l.map((a) => ({ nom: a.nom, d: a.d + a.v * Math.min((t - a.t) / 1000, 1), couleur: a.couleur, w: a.w, kg: a.kg }))].sort((a, b) => b.d - a.d);
-    let html = '<div class="tt">Groupe ' + code + (l.length ? "" : " · personne sur ce monde") + "</div>";
+    // (v97) arrivée commune : mon temps d'arrivée dès que j'ai franchi la ligne, annonce de ma place dans le groupe
+    if (finGroupe > 0 && monFin === null && balade.temps > 5 && balade.distance - (balade.d0 || 0) >= finGroupe) {
+      monFin = Math.round(balade.temps * 10) / 10;
+      const devant = l.filter((a) => a.fin != null && a.fin < monFin).length + 1;
+      annoncer("Arrivée du groupe", (devant === 1 ? "1er" : devant + "e") + " du groupe · " + formatDuree(Math.round(monFin)), devant === 1 ? "arrivee" : "", 8);
+      log("Course de groupe : arrivée " + devant + "e en " + formatDuree(Math.round(monFin)) + ".");
+    }
+    moi.fin = monFin;
+    const tous = [moi, ...l.map((a) => ({ nom: a.nom, d: a.d + a.v * Math.min((t - a.t) / 1000, 1), couleur: a.couleur, w: a.w, kg: a.kg, fin: a.fin }))]
+      .sort((a, b) => (a.fin != null && b.fin != null) ? a.fin - b.fin : a.fin != null ? -1 : b.fin != null ? 1 : b.d - a.d);
+    let html = '<div class="tt">Groupe ' + code + (finGroupe > 0 ? " · course" : "") + (l.length ? "" : " · personne sur ce monde") + "</div>";
     for (const x of tous) {
-      const e = Math.round(x.d - moi.d), ec = x.moi ? "" : (e >= 0 ? "+" : "−") + (Math.abs(e) >= 1000 ? fr1(Math.abs(e) / 1000) + " km" : Math.abs(e) + " m");
+      const e = Math.round(x.d - moi.d), ec = x.fin != null ? "arrivé " + formatDuree(Math.round(x.fin)) : x.moi ? "" : (e >= 0 ? "+" : "−") + (Math.abs(e) >= 1000 ? fr1(Math.abs(e) / 1000) + " km" : Math.abs(e) + " m");
       html += '<div class="pl' + (x.moi ? " moi" : "") + '"><i style="background:' + hex6(x.couleur) + '"></i><b>' + echapper(x.nom) + "</b><em>" + ec + '</em><span class="sb">' + x.w + " W · " + fr1(x.w / x.kg) + " W/kg</span></div>";
     }
     if (bloc.dataset.sig !== html) { bloc.dataset.sig = html; $("hz-groupe-c").innerHTML = html; }
@@ -215,5 +229,15 @@ const Groupe = (function () {
   $("btn-groupe-quitter").addEventListener("click", () => { if (connecte()) envoyer({ k: "parti", id: monId }); quitter(); });
   rendre();
 
-  return { positions, liste3D, donnees3D, abriPour, actif: () => !!peer && amis.size > 0, code: () => code };
+  // (v97) résultat de la course de groupe pour le résumé de fin : arrivées par temps, puis ceux qui roulent encore
+  function resume() {
+    if (!peer || finGroupe <= 0 || monFin === null) return null;
+    const t = performance.now(), l = surMonMonde().map((a) => ({ nom: a.nom, fin: a.fin, d: a.d + a.v * Math.min((t - a.t) / 1000, 1) }));
+    l.push({ nom: nom() + " (toi)", fin: monFin, d: balade.distance, moi: true });
+    l.sort((a, b) => (a.fin != null && b.fin != null) ? a.fin - b.fin : a.fin != null ? -1 : b.fin != null ? 1 : b.d - a.d);
+    const rang = l.findIndex((x) => x.moi) + 1;
+    return '<div class="rf-tour"><h3>Course de groupe ' + code + "</h3><div>Tu termines <b>" + (rang === 1 ? "1er du groupe : victoire !" : rang + "e sur " + l.length) + "</b> en " + formatDuree(Math.round(monFin)) + ".</div>" +
+      l.map((x, i) => '<div class="' + (x.moi ? "moi" : "") + '"><span>' + (i + 1) + ". " + echapper(x.nom) + "</span><b>" + (x.fin != null ? formatDuree(Math.round(x.fin)) + (i ? " (+" + Math.round(x.fin - l[0].fin) + " s)" : "") : "en route") + "</b></div>").join("") + "</div>";
+  }
+  return { resume, positions, liste3D, donnees3D, abriPour, actif: () => !!peer && amis.size > 0, code: () => code };
 })();

@@ -229,6 +229,7 @@ const Progression = (function () {
       ecrireJ(CLE_SEGS, records);
     }
     sortie.segs++; sortie.xp += XP_SEG + (premier ? XP_SEG_PREMIER : 0) + (bat ? XP_SEG_RECORD : 0);
+    if (typeof Defis !== "undefined") Defis.moi(sg.cle, sg.nom, route.nom, t);          // (v97) défis de la semaine entre amis
     if (bat) sortie.records++;
     sortie.journal.push({ nom: sg.nom, type: sg.type, t, record: bat, premier, ancien: rec ? rec.t : null });
     const o = occurrence(sg, abs);
@@ -515,5 +516,5 @@ const Progression = (function () {
   const lienA = document.getElementById("accueil-prog");
   if (lienA) lienA.addEventListener("click", ouvrir);
 
-  return { maj, terminer, oublierSortie, fantome, profil, htmlResume, ouvrir, majAccueil, segments: () => seg.liste, segmentsRoute, niveau: () => niveau(prog.xp), TYPES_SEG };
+  return { records: () => records, maj, terminer, oublierSortie, fantome, profil, htmlResume, ouvrir, majAccueil, segments: () => seg.liste, segmentsRoute, niveau: () => niveau(prog.xp), TYPES_SEG };
 })();

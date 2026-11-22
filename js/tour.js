@@ -13,11 +13,14 @@ const Tour = (function () {
   // mondes possibles pour chaque type d'étape, avec la distance visée (0 = parcours en entier, aller simple)
   const BANQUE = {
     plat: [["mer", 30], ["nord", 31], ["criterium", 40], ["longchamp", 40], ["triS", 40]],
-    vallonne: [["ardennes", 50], ["toscane", 40], ["desert", 40]],
+    vallonne: [["ardennes", 50], ["toscane", 40], ["desert", 40], ["huy", 40], ["lbl", 0], ["flandres", 0]],
     montagne: [["pyrenees", 0], ["alpes", 0]],
-    clm: [["triXS", 10], ["triS", 20], ["prologue", 0], ["polders", 40], ["chronocol", 0]]
+    clm: [["triXS", 10], ["triS", 20], ["prologue", 0], ["polders", 40], ["chronocol", 0], ["alpehuez", 0]]
   };
-  const PLANS = { 3: ["plat", "clm", "montagne"], 4: ["plat", "clm", "vallonne", "montagne"], 5: ["plat", "vallonne", "clm", "plat", "montagne"] };
+  // (v96) Grands Tours : 8 étapes (une semaine), 12 et 21 étapes ; deux contre-la-montre, un tiers de montagne ; les mondes se répètent quand la banque est épuisée
+  const grandTour = (n) => { const p = [], clm = n >= 21 ? [0, n - 2] : [0, Math.floor(n * 0.6)]; for (let i = 0; i < n; i++) p.push(clm.includes(i) ? "clm" : i % 3 === 2 || i >= n - 3 ? "montagne" : i % 3 === 1 ? "vallonne" : "plat"); p[n - 1] = i0(p); return p; };
+  const i0 = (p) => "montagne";
+  const PLANS = { 3: ["plat", "clm", "montagne"], 4: ["plat", "clm", "vallonne", "montagne"], 5: ["plat", "vallonne", "clm", "plat", "montagne"], 8: grandTour(8), 12: grandTour(12), 21: grandTour(21) };
   const NOMS_TOUR = ["Tour des Quatre Vents", "Tour de la Vallée", "Grande Boucle virtuelle", "Tour des Cols et des Plaines", "Ronde des Saisons", "Tour du Home Trainer"];
   const BONIF = [10, 6, 4];
   // (v86) points : sprints intermédiaires (maillot vert), arrivée des étapes en ligne, et nombre de coureurs d'une équipe comptés au temps par équipe
@@ -44,7 +47,7 @@ const Tour = (function () {
   function creer(nb, niveau, nombre, enEquipe) {
     const plan = PLANS[nb] || PLANS[3], pris = new Set(), etapes = [];
     for (const type of plan) {
-      const choix = BANQUE[type].filter(([id]) => monde(id) && !pris.has(id)), c = choix[Math.floor(Math.random() * choix.length)] || BANQUE[type][0];
+      const dispo = BANQUE[type].filter(([id]) => monde(id)), neuf = dispo.filter(([id]) => !pris.has(id)), choix = neuf.length ? neuf : dispo, c = choix[Math.floor(Math.random() * choix.length)] || BANQUE[type][0];
       pris.add(c[0]);
       const m = monde(c[0]), L = m.route.longueur, tours = toursEtape(m, c[1], type);
       etapes.push({ monde: c[0], type, tours, km: Math.round((m.route.boucle ? tours * L : L) / 100) / 10 });
@@ -197,7 +200,7 @@ const Tour = (function () {
     if (!tour) {
       c.innerHTML = "<b>Crée ton Tour</b><p>3 à 5 étapes sur des mondes différents (plat, vallonné, montagne), dont toujours un contre-la-montre (individuel, ou par équipe si tu coches « En équipe » : file alignée, relais, temps du 4e coureur), avec les mêmes 40 coureurs (toi compris) du début à la fin. " +
         "4 classements : général au temps (bonifications de 10, 6 et 4 s aux trois premiers de chaque étape en ligne, maillot jaune), meilleur grimpeur (points au sommet des montées, maillot à pois), meilleur sprinteur (sprints et arrivées, maillot vert) et par équipe. Une étape quand tu veux, par exemple une par jour.</p>" +
-        '<div class="barre"><label>Étapes&nbsp;: <select id="tour-nb"><option value="3">3 étapes</option><option value="4" selected>4 étapes</option><option value="5">5 étapes</option></select></label>' +
+        '<div class="barre"><label>Étapes&nbsp;: <select id="tour-nb"><option value="3">3 étapes</option><option value="4" selected>4 étapes</option><option value="5">5 étapes</option><option value="8">8 étapes (une semaine)</option><option value="12">12 étapes</option><option value="21">21 étapes (Grand Tour)</option></select></label>' +
         '<label class="tour-eq"><input type="checkbox" id="tour-equipe"> En équipe (8 équipes de 5, tu as 4 coéquipiers)</label><button type="button" class="plein" id="tour-creer">Créer le Tour</button></div>' +
         '<div class="stats">Le niveau (facile 80 %, normal 100 %, hardcore 115 % de ta FTP) est gardé pour tout le Tour.</div>';
       $("tour-creer").onclick = () => { creer(parseInt($("tour-nb").value, 10), $("peloton-niveau").value, Peloton.MAX_IA, $("tour-equipe").checked); rendre(); majResumeChoix(); };

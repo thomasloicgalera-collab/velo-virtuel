@@ -233,6 +233,8 @@ function tirerAmbiance(appliquer) {
   if (r.foule !== undefined) $("foule").value = r.foule;
   $("pietons").value = "2";                                   // (v72) toujours « Beaucoup »
   if (r.pelotonMode) $("peloton-mode").value = r.pelotonMode;
+  if (r.courseFormat && [...$("course-format").options].some((o) => o.value === r.courseFormat)) $("course-format").value = r.courseFormat;   // (v94)
+  if (r.poursuiteKm) $("poursuite-km").value = r.poursuiteKm;
   if (r.fantomePR) $("fantome-pr").checked = true;
   if (r.fantomeSeg === false) $("fantome-seg").checked = false;
   if (r.echauffement) $("echauffement").checked = true;

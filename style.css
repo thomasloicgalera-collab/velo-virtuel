@@ -1198,3 +1198,59 @@ body:has(#st-trainer.ok, #st-power.ok, #st-hr.ok) .puce-connexion i { background
 #onglet-connectivite > .intro { display: none; }
 #onglet-connectivite .appareils { display: flex; flex-direction: column; gap: 10px; }
 #onglet-connectivite .conn-journal { margin-top: 12px; }
+
+/* (v95) programmes d'entraînement et fenêtre du résultat d'un test FTP */
+.pg-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+.pg-carte, .pg-suite { background: rgba(255,255,255,.05); border: 1px solid var(--trait); border-radius: 14px; padding: 14px; }
+.pg-t { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.pg-t span { color: var(--discret); font-size: .8rem; }
+.pg-carte p, .pg-suite p { color: var(--discret); font-size: .88rem; margin: 8px 0 12px; }
+.pg-suite h3 { margin: 6px 0 0; }
+.pg-entete { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.pg-entete span { display: block; color: var(--discret); font-size: .85rem; }
+.pg-barre { height: 8px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
+.pg-barre i { display: block; height: 100%; background: var(--accent); }
+.pg-semaines { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin: 14px 0; }
+.pg-sem { border: 1px solid var(--trait); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.pg-sem.cour { border-color: var(--accent); }
+.pg-s { display: flex; gap: 8px; align-items: center; text-align: left; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; background: rgba(255,255,255,.04); color: var(--texte); cursor: pointer; font-size: .85rem; }
+.pg-s em { font-style: normal; color: var(--discret); min-width: 3.6em; }
+.pg-s.ok { opacity: .6; }
+.pg-s.ok span { color: #3fcf6b; }
+.pg-s.cur { border-color: var(--accent); }
+.ftp-modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.ftp-boite { background: #1a2029; border: 1px solid var(--trait); border-radius: 16px; padding: 22px 26px; max-width: 440px; text-align: center; color: var(--texte); }
+.ftp-boite h3 { margin: 0 0 6px; }
+.ftp-gros { font-size: 2.6rem; font-weight: 800; margin: 4px 0; color: var(--accent); }
+.ftp-boite .rf-boutons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+
+/* (v96) tri des parcours et générateur de parcours */
+.ac-tri { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; color: var(--discret); font-size: .85rem; }
+.ac-gen { margin: 12px 0; border: 1px solid var(--trait); border-radius: 14px; background: rgba(255,255,255,.04); }
+.ac-gen > summary { cursor: pointer; padding: 11px 14px; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; list-style: none; }
+.ac-gen > summary span { color: var(--discret); font-size: .8rem; }
+.ac-gen-c { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 14px; padding: 4px 14px 14px; align-items: end; }
+.ac-gen-c .info { grid-column: 1 / -1; margin: 0; }
+
+/* (v97) rapport de séance, défis de la semaine */
+.rf-rapport { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--trait); border-radius: 12px; background: rgba(255,255,255,.04); }
+.rf-rapport h3 { margin: 0 0 6px; }
+.rp-bloc { margin: 8px 0; }
+.rp-t { font-weight: 700; font-size: .88rem; margin-bottom: 4px; }
+.rp-zones { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: rgba(255,255,255,.08); }
+.rp-zones span { display: block; min-width: 2px; }
+.rp-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; font-size: .78rem; color: var(--discret); }
+.rp-leg i { display: inline-block; width: .7em; height: .7em; border-radius: 2px; margin-right: 4px; }
+.rp-l { display: flex; justify-content: space-between; gap: 10px; font-size: .84rem; padding: 2px 0; }
+.rp-l.ok span { color: #3fcf6b; }
+.rp-l.ko span { color: #ff8a4c; }
+.rp-l b.mieux { color: #3fcf6b; }
+.rp-l b.moins { color: #ff8a4c; }
+.defis-import { display: flex; gap: 8px; margin: 8px 0; }
+.defis-import input { flex: 1; min-width: 0; }
+.df-seg { padding: 8px 0; border-bottom: 1px solid var(--trait); }
+.df-t { display: flex; justify-content: space-between; gap: 8px; }
+.df-t span { color: var(--discret); font-size: .8rem; }
+.df-l { display: flex; justify-content: space-between; font-size: .86rem; padding: 2px 0; }
+.df-l.moi { color: var(--accent); font-weight: 700; }
+.df-l em { font-style: normal; color: var(--discret); font-weight: 400; margin-left: 6px; }

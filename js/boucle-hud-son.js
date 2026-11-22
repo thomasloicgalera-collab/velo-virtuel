@@ -146,8 +146,10 @@ function rafraichir() {
   $("resume-capteurs").textContent = "Home trainer : " + $("st-trainer").textContent + " · Capteur de puissance : " + $("st-power").textContent + " · Ceinture cardio : " + $("st-hr").textContent + "  (onglet Connectivité)";
   majHud(puissance, fc);
   if (typeof Progression !== "undefined") Progression.maj();       // segments chronométrés, expérience de la sortie (v69)
+  if (typeof Formats !== "undefined") Formats.maj();                // (v94) formats de course : sprints, éliminations, poursuite…
   if (typeof Tour !== "undefined") Tour.maj();                     // (v69 suite) Tour à étapes : sommets passés (maillot à pois)
   majRavito();
+  if (typeof Alertes !== "undefined") Alertes.tick(ecoule, puissance);            // (v97) alertes : cœur, puissance cible, durée visée
   if (typeof Ecran2 !== "undefined") Ecran2.maj();
   garderEcranAllume(balade.enCours || balade.auto || (balade.temps > 0 && session.samples.length > 0));
 }
@@ -213,6 +215,13 @@ function majHud(puissance, fc) {
   }
   const cible = $("hz-cible"), panneau = $("hz-seance");
   if (erg) {
+    if (seance.dyn && seance.dynInfo) {                        // (v95) séance qui suit le parcours : cible et consignes du moment
+      cible.textContent = seance.dynInfo.cible;
+      panneau.hidden = false;
+      const c2 = "dyn|" + seance.dynInfo.lignes.join("|");
+      if (c2 !== hudSeance) { hudSeance = c2; panneau.innerHTML = '<div class="tt">Séance</div>' + seance.dynInfo.lignes.map((l) => '<div class="iv"><span>' + l + "</span></div>").join(""); }
+      return;
+    }
     const cur = intervalleA(balade.temps - seance.t0);
     cible.textContent = cur && cur.iv.libre ? "effort libre · " + formatDuree(Math.ceil(cur.reste)) : cur && cur.iv.fc ? "cœur " + Math.round(cur.iv.fc * fcmax() / 100) + " bpm · " + (etatFc.i === cur.i ? Math.round(etatFc.w) : "–") + " W · " + formatDuree(Math.ceil(cur.reste)) : cur ? "tenir " + Math.round(pctA(cur.iv, 1 - cur.reste / (cur.iv.min * 60)) * ftp() / 100 * (seance.k || 1)) + " W · " + formatDuree(Math.ceil(cur.reste)) : "séance terminée";
     panneau.hidden = false;
@@ -507,9 +516,14 @@ function lancerPeloton() {
   const mode = revoir || (typeof echauffementEnCours === "function" && echauffementEnCours()) || pm === "fantome" ? "aucun" : et ? et.mode : pm === "tour" ? "aucun" : pm;
   // (v86) Course, contre-la-montre et Tour : toujours 40 coureurs (toi compris) ; course en équipe seulement dans un Tour
   const compet = mode === "course" || mode === "clm", nombre = compet ? Peloton.MAX_IA : parseInt($("peloton-nombre").value, 10) || 8;
+  // (v94) formats de course (points, montagne, élimination, poursuite, chasse, leader) : js/formats.js
+  let F = null;
+  if (typeof Formats !== "undefined") { if (mode === "course" && !et) F = Formats.preparer(); else Formats.oublier(); }
   Peloton.demarrer({ mode, niveau: et ? et.niveau : $("peloton-niveau").value, ftp: ftp(), poids: parseFloat($("poids").value) || 75, wprime: 14841,   /* (v72) réserve W′ des coureurs virtuels : valeur fixe, plus réglable */
-                     d0: balade.distance, longueur: route.longueur, boucle: !!route.boucle, pente: penteA, equipe: et ? Tour.equipe(mode) : null, enEquipe: false, parEquipe: !!(et && et.ttt),
-                     tours: route.boucle ? (et ? et.tours : parseInt($("peloton-tours").value, 10) || 0) : 0, nombre });
+                     d0: balade.distance, longueur: route.longueur, boucle: !!route.boucle, pente: penteA, equipe: et ? Tour.equipe(mode) : (F && F.equipe) || null, enEquipe: false, parEquipe: !!(et && et.ttt),
+                     tours: F && F.tours !== undefined ? F.tours : route.boucle ? (et ? et.tours : parseInt($("peloton-tours").value, 10) || 0) : 0, nombre: F && F.nombre ? F.nombre : nombre,
+                     hook: F ? F.hook : null, longueurFixe: F ? F.longueurFixe || 0 : 0 });
+  if (F) Formats.apresDemarrage();
   // (v86) contre-la-montre : vélo de CLM obligatoire et rampe de départ (jamais de rampe si la sortie est déjà commencée)
   // (v89) après un échauffement, on s'arrête sur la rampe : le compte à rebours part au premier coup de pédale
   if (mode === "clm") {
@@ -588,7 +602,9 @@ function majHudPeloton() {
   const mj = typeof Tour !== "undefined" ? Tour.maillots() : null;
   const maillot = (nom) => mj ? (mj.jaune === nom ? '<span class="mj jaune" title="Maillot jaune"></span>' : "") + (mj.pois === nom ? '<span class="mj pois" title="Maillot à pois"></span>' : "") + (mj.vert === nom ? '<span class="mj vert" title="Maillot vert"></span>' : "") : "";
   const fmtE = (s) => { const a = Math.abs(s); return (s > 0 ? "+" : "−") + (a >= 60 ? Math.floor(a / 60) + ":" + deuxChiffres(Math.round(a % 60)) : Math.round(a) + "\u00a0s"); };
-  let html = '<div class="tt">' + titre + "</div>";
+  const FM = typeof Formats !== "undefined" ? Formats.hud(cl, moi) : null;       // (v94) formats de course : bloc propre
+  let html = '<div class="tt">' + (FM && FM.titre ? FM.titre : titre) + "</div>";
+  if (FM && FM.remplace) { html += FM.html; if (html !== pelotonSig) { pelotonSig = html; $("hz-peloton-c").innerHTML = html; } return; }
   if (course && nt > 1 && tourMoi === nt && moi.fini === null && !pelotonDernierTour) { pelotonDernierTour = true; annoncer("Dernier tour", fr1(route.longueur / 1000) + " km avant l’arrivée", "", 5); }
   // beaucoup de coureurs : le premier et cinq lignes autour de toi (deux devant, deux derrière, décalées en tête ou en queue), les autres remplacés par « … »
   // (v90) classement plus court : le premier, toi et un coureur de chaque côté, le reste replié
@@ -606,6 +622,7 @@ function majHudPeloton() {
     const sous = x.user || banal ? "" : '<span class="sb">' + x.etat + "</span>";
     html += '<div class="pl' + (x.user ? " moi" : "") + '"><i style="background:' + hex6(x.couleur) + '"></i><b>' + (course ? (i + 1) + ". " : "") + maillot(x.nom) + (x.eq === 0 && !x.user ? "★ " : "") + x.nom + "</b><em>" + ecart + "</em>" + sous + "</div>";
   });
+  if (FM) html += FM.html;
   // (v87) CLM par équipe : où sont tes coéquipiers par rapport à toi (pour rester dans la file)
   if (Peloton.ttt() && moi.fini === null && Peloton.parti()) html += '<div class="tt">Ton équipe</div>' + Peloton.equipiers().map((x) => '<div class="pl"><b>★ ' + x.nom + '</b><em>' + (x.ecart >= 0 ? "+" : "−") + Math.abs(Math.round(x.ecart)) + "\u00a0m</em></div>").join("");
   if (course && moi.fini !== null && !pelotonFinAnnonce) {
@@ -753,6 +770,11 @@ function construireResume() {
       res.rang = [i + 1, cl.length, course.fini || Peloton.longueurCourse() === Infinity];   // course sans arrivée : simple position
     }
   }
+  try { res.programme = typeof Programmes !== "undefined" && seance.nom ? Programmes.fait(seance.nom, r.n) : null; } catch (e) { res.programme = null; }   // (v95) programme d'entraînement
+  try { res.groupe = typeof Groupe !== "undefined" ? Groupe.resume() : null; } catch (e) { res.groupe = null; }       // (v97) course de groupe
+  try { res.rapport = typeof Rapport !== "undefined" ? Rapport.construire(res, session.samples) : ""; } catch (e) { res.rapport = ""; }   // (v97) rapport détaillé
+  try { res.format = typeof Formats !== "undefined" ? Formats.resume() : null; } catch (e) { res.format = null; }   // (v94) résultat du format de course
+  if (res.format && Formats.rang()) { const fr = Formats.rang(); res.rang = fr; if (course) { course.rang = fr[0]; course.n = fr[1]; course.fini = fr[2]; } }
   try { res.tour = typeof Tour !== "undefined" ? Tour.finEtape() : null; } catch (e) { res.tour = null; }   // (v69 suite) étape d'un Tour : temps, classements, maillots
   try { res.prog = Progression.terminer(course); } catch (e) { res.prog = null; }   // expérience, défis et badges (v69)
   if (seance.ftpTest) { res.ftp = seance.ftpTest; seance.ftpTest = null; }          // (v69 suite) test FTP fait pendant la sortie
@@ -774,7 +796,11 @@ function afficherResume(res) {
     const IF = r.np / ftp(), g = Math.round(r.kcal * borner(0.3 + 0.6 * IF, 0.4, 0.9) / 4);
     h += '<div class="rf-ravito">🍝 Tu as brûlé environ <b>' + g + " g de glucides</b> (sur " + Math.round(r.kcal) + " kcal) : bois bien et prends un repas avec des féculents dans l’heure qui suit pour récupérer.</div>";
   }
+  if (res.groupe) h += res.groupe;
+  if (res.format) h += res.format;
+  if (res.programme) h += '<div class="rf-tour"><h3>Programme « ' + res.programme.programme + ' »</h3><div>Séance <b>' + res.programme.nom + '</b> validée (semaine ' + res.programme.semaine + ', séance ' + res.programme.seance + ').' + (res.programme.fini ? ' <b>Programme terminé, bravo !</b>' : ' Il reste ' + res.programme.reste + ' séance' + (res.programme.reste > 1 ? 's' : '') + '.') + '</div></div>';
   if (res.tour) h += res.tour;
+  if (res.rapport) h += res.rapport;
   if (res.ftp) {
     const df = res.ftp.w - ftp();
     h += '<div class="ftp-estim"><div>Test FTP : <span class="gros">' + res.ftp.w + "&nbsp;W</span> (" + (df >= 0 ? "+" : "") + df + "&nbsp;W)</div>" +

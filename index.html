@@ -76,7 +76,7 @@
   <div class="info" id="resume-capteurs" style="margin-bottom:10px"></div>
   <!-- (v76) séances : trois onglets (bibliothèque, créer, en direct) ; la bibliothèque = liste à gauche, détail à droite -->
   <div class="sq-barre">
-    <div class="sous-onglets" id="sq-onglets" role="tablist" aria-label="Séances"><button type="button" role="tab" data-sq="biblio" aria-selected="true">Bibliothèque</button><button type="button" role="tab" data-sq="creer" aria-selected="false">Créer</button><button type="button" role="tab" data-sq="direct" aria-selected="false">En direct</button></div>
+    <div class="sous-onglets" id="sq-onglets" role="tablist" aria-label="Séances"><button type="button" role="tab" data-sq="biblio" aria-selected="true">Bibliothèque</button><button type="button" role="tab" data-sq="creer" aria-selected="false">Créer</button><button type="button" role="tab" data-sq="prog" aria-selected="false">Programmes</button><button type="button" role="tab" data-sq="direct" aria-selected="false">En direct</button></div>
     <div class="sq-import">
       <label class="bouton">Importer une séance (.erg, .mrc ou .zwo)<input type="file" id="fichier-erg" multiple accept=".erg,.mrc,.zwo,.xml,text/plain"></label>
       <span class="stats" id="msg-import"></span>
@@ -126,6 +126,8 @@
   </section>
 
   </div>
+
+  <div id="sq-prog" hidden></div>
 
   <div id="sq-direct" hidden>
   <section class="principal">
@@ -216,8 +218,19 @@
           <div class="ac-etape"><div class="am-sur"><span class="ac-n">1</span>Parcours</div>
           <div class="ac-filtres" id="ac-filtres" role="group" aria-label="Filtrer les parcours"><button type="button" class="chip on" data-f="tous">Tous</button><button type="button" class="chip" data-f="montagne">Montagne</button><button type="button" class="chip" data-f="plaine">Plaine</button><button type="button" class="chip" data-f="ville">Ville</button><button type="button" class="chip" data-f="chrono">Contre-la-montre</button><button type="button" class="chip" data-f="gpx">Mes GPX</button></div>
         <div class="accueil-mondes">
-          
+          <label class="ac-tri">Trier les parcours&nbsp;: <select id="ac-tri"><option value="defaut" selected>Ordre habituel</option><option value="distance">Distance (du plus court)</option><option value="denivele">Dénivelé (du plus haut)</option><option value="difficulte">Difficulté (du plus facile)</option></select></label>
           <div class="grille-mondes" id="tuiles-mondes"></div>
+          <details class="ac-gen" id="gen-parcours"><summary><b>Créer un parcours</b><span>distance, dénivelé et décor au choix</span></summary>
+            <div class="ac-gen-c">
+              <label>Nom (facultatif)&nbsp;: <input type="text" id="gen-nom" maxlength="30" placeholder="Mon parcours"></label>
+              <label>Distance&nbsp;: <input type="number" id="gen-km" value="40" min="5" max="150" step="1"> km</label>
+              <label>Dénivelé positif&nbsp;: <input type="number" id="gen-dplus" value="600" min="0" max="4000" step="50"> m</label>
+              <label>Type&nbsp;: <select id="gen-type"><option value="boucle">Boucle</option><option value="simple">Aller simple</option></select></label>
+              <label>Décor&nbsp;: <select id="gen-decor"><option value="campagne">Campagne</option><option value="montagne">Montagne</option><option value="mer">Bord de mer</option><option value="ardennes">Forêt des Ardennes</option><option value="toscane">Collines de Toscane</option><option value="desert">Désert</option></select></label>
+              <button type="button" class="plein" id="gen-creer">Créer ce parcours</button>
+              <div class="info" id="gen-msg" aria-live="polite">Le tracé est tiré au hasard : recommence pour en obtenir un autre. Les parcours créés sont gardés dans ton navigateur.</div>
+            </div>
+          </details>
           <button id="btn-nouveau-monde" class="nouveau-monde" title="Un monde numérisé suit exactement ton tracé GPX : le décor (routes, bâtiments, bois, eau) est téléchargé depuis OpenStreetMap et le relief depuis l’IGN, puis gardé dans ton navigateur. Chaque monde a ses segments chronométrés (sprints, montées, secteurs) : tes records et ta progression sont gardés dans ce navigateur. Tu peux aussi déposer le fichier GPX sur cette page.">＋ Nouveau monde (fichier GPX)</button><input type="file" id="fichier-monde-gpx" accept=".gpx,application/gpx+xml" hidden>
           <div class="info" id="msg-monde" aria-live="polite"></div>
         </div>
@@ -243,6 +256,9 @@
               <label>Niveau des autres cyclistes&nbsp;: <select id="peloton-niveau"><option value="facile">Facile (80&nbsp;% de ta FTP)</option><option value="equilibre" selected>Normal (100&nbsp;% de ta FTP)</option><option value="expert">Hardcore (115&nbsp;% de ta FTP)</option></select></label>
               <label>Nombre d’autres coureurs&nbsp;: <select id="peloton-nombre"><option value="4">4 coureurs</option><option value="5">5 coureurs</option><option value="6">6 coureurs</option><option value="7">7 coureurs</option><option value="8" selected>8 coureurs</option><option value="9">9 coureurs</option><option value="10">10 coureurs</option><option value="11">11 coureurs</option><option value="12">12 coureurs</option></select></label>
               <p class="stats" id="note-40" hidden>Course, contre-la-montre et Tour : toujours 40 coureurs au départ (toi compris).</p>
+              <label id="choix-format" hidden>Format de course&nbsp;: <select id="course-format"><option value="classique" selected>Classique (arrivée, attaques, sprint)</option><option value="points">Course à points (sprints intermédiaires)</option><option value="montagne">Course de la montagne (points aux sommets)</option><option value="elimination">Élimination (le dernier de chaque ligne sort)</option><option value="poursuite">Poursuite (toi contre un adversaire)</option><option value="chasse">Chasse à l’échappée</option><option value="leader">Protège ton leader (équipe)</option></select></label>
+              <label id="choix-poursuite" hidden>Distance de la poursuite&nbsp;: <select id="poursuite-km"><option value="2000">2 km</option><option value="4000" selected>4 km</option><option value="6000">6 km</option><option value="10000">10 km</option></select></label>
+              <div class="info" id="info-format" hidden></div>
               <label class="case" id="choix-echauffement"><input type="checkbox" id="echauffement"> Échauffement de 10 min avant le départ (mode ERG, la course part ensuite)</label>
               <label id="choix-tours">Arrivée&nbsp;: <select id="peloton-tours"><option value="0">Sans arrivée (tant que tu roules)</option><option value="1">1 tour</option><option value="2">2 tours</option><option value="3" selected>3 tours</option><option value="4">4 tours</option><option value="5">5 tours</option><option value="6">6 tours</option><option value="7">7 tours</option><option value="8">8 tours</option><option value="9">9 tours</option><option value="10">10 tours</option><option value="11">11 tours</option><option value="12">12 tours</option><option value="13">13 tours</option><option value="14">14 tours</option><option value="15">15 tours</option><option value="16">16 tours</option><option value="17">17 tours</option><option value="18">18 tours</option><option value="19">19 tours</option><option value="20">20 tours</option></select></label>
               <div class="info" id="info-clm" hidden>Contre-la-montre : départs toutes les 30 secondes, la moitié des coureurs partent avant toi (tu peux les rattraper), les autres après. Pas d’aspiration : chacun roule seul. L’écart avec chacun est donné à chaque point de chrono (tous les 100 m).</div>
@@ -255,6 +271,15 @@
             <label class="case"><input type="checkbox" id="fantome-seg" checked> Fantôme de mon record sur les segments chronométrés (cycliste doré)</label>
             <div class="stats" id="fantome-info"></div>
           </div>
+</details>
+<!-- (v97) défis de la semaine entre amis (js/defis.js) -->
+<details class="accueil-options accueil-defis" id="accueil-defis">
+  <summary><b>Défis de la semaine</b><span id="defis-resume"></span></summary>
+  <div class="ao-corps">
+    <div id="defis-c"></div>
+    <div class="defis-import"><input type="text" id="defis-code" placeholder="Colle ici le code défi d’un ami (VD1:…)" autocomplete="off" aria-label="Code défi d’un ami"><button type="button" id="defis-ajout">Ajouter</button></div>
+    <div class="info" id="defis-msg" aria-live="polite"></div>
+  </div>
 </details>
 <!-- (v71) sortie de groupe : rouler en direct avec des amis (js/groupe.js) -->
 <details class="accueil-options accueil-groupe" id="accueil-groupe">
@@ -506,7 +531,7 @@
           <label>Âge&nbsp;: <input type="number" id="age" value="35" min="10" max="99"> ans</label>
           <label>Taille&nbsp;: <input type="number" id="taille" value="175" min="120" max="220"> cm</label>
           <label>Poids&nbsp;: <input type="number" id="poids" value="75" min="40" max="150"> kg</label>
-          <label>FTP&nbsp;: <input type="number" id="ftp" value="200" min="50" max="600"> W</label>
+          <label>FTP&nbsp;: <input type="number" id="ftp" value="200" min="50" max="600"> W</label><div class="stats" id="ftp-historique"></div>
           <label>FC max&nbsp;: <input type="number" id="fcmax" value="190" min="120" max="220"> bpm</label>
           <button id="btn-fcmax-estime" class="petit">Estimer la FC max avec mon âge</button>
           <label><input type="checkbox" id="zones-fc-auto" checked> Zones de FC calculées d’après mes séances</label>
@@ -542,6 +567,9 @@
           <legend>Sensations de route</legend>
           <label hidden><input type="checkbox" id="freinage" checked> Freiner avant les virages serrés (descentes, épingles, critérium)</label>
           <label><input type="checkbox" id="ravito" checked> Rappels pour boire (toutes les 15 min) et manger (à partir de 40 min)</label>
+          <label><input type="checkbox" id="alerte-fc" checked> Alerte si ma fréquence cardiaque dépasse <input type="number" id="alerte-fc-seuil" value="92" min="70" max="100" style="width:4.5em"> % de ma FC max pendant 1 min</label>
+          <label><input type="checkbox" id="alerte-erg" checked> Alerte si je suis à plus de 15 % de la puissance cible pendant 20 s (mode ERG)</label>
+          <label>Durée visée de la sortie&nbsp;: <input type="number" id="alerte-duree" value="0" min="0" max="600" style="width:5em"> min (0 = aucune) · annonce 5 min avant la fin et à la fin</label>
           <details class="reg-aide"><summary>En savoir plus</summary><div class="stats">Sur les pavés (±1,2 % de pente) et le gravier (±0,5 %), la résistance du home trainer varie toujours un peu ; cette case ne règle que les secousses de l’image.</div></details>
         </fieldset>
         <fieldset data-r="son">
@@ -664,6 +692,11 @@
 <script src="js/tour.js"></script>
 <script src="js/revoir-ecran2.js"></script>
 <script src="js/mondes.js"></script>
+<script src="js/formats.js"></script>
+<script src="js/programmes.js"></script>
+<script src="js/defis.js"></script>
+<script src="js/alertes.js"></script>
+<script src="js/rapport.js"></script>
 <script src="js/demarrage.js"></script>
 <script src="js/accueil.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>

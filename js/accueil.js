@@ -209,6 +209,7 @@ function majModes() {
   const v = $("peloton-mode").value;
   document.querySelectorAll(".modes .mode").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === v)));
   $("options-ia").hidden = v === "aucun" || v === "fantome";
+  if (typeof Formats !== "undefined") { Formats.majInfo(); $("info-format").hidden = v !== "course"; }   // (v94) format de course
   { const m = MONDES.find((x) => x.id === mondeChoisiId), tc = m && m.route ? toursConseilles(m.route) : null, st = $("peloton-tours");   // (v89) petit circuit : 1 tour en CLM, nombre conseillé sinon
     if (tc && !m.toursDefaut) { if (v === "clm" && st.value === String(tc)) st.value = "1"; else if (v !== "clm" && st.value === "1") st.value = String(tc); } }
   { const fixe = v === "course" || v === "clm" || v === "tour"; $("peloton-nombre").closest("label").hidden = fixe; $("note-40").hidden = !fixe; }   // (v86) 40 coureurs en compétition
@@ -273,7 +274,8 @@ function majAccueilBMaintenant() {
   dessinerProfilAccueil($("am-profil"), r);
   const p = [];
   if (!$("options-ia").hidden) {
-    p.push((["course", "clm", "tour"].includes($("peloton-mode").value) ? 40 : $("peloton-nombre").value) + " coureurs · " + NIVEAUX_COURTS[$("peloton-niveau").value]);
+    p.push((typeof Formats !== "undefined" && $("peloton-mode").value === "course" && Formats.nombre() ? Formats.nombre() : ["course", "clm", "tour"].includes($("peloton-mode").value) ? 40 : $("peloton-nombre").value) + " coureurs · " + NIVEAUX_COURTS[$("peloton-niveau").value]);
+    if (typeof Formats !== "undefined" && $("peloton-mode").value === "course" && $("course-format").value !== "classique") p.push(Formats.nom());
     if (!$("choix-tours").hidden) { const nt = parseInt($("peloton-tours").value, 10) || 0; p.push(nt ? nt + (nt > 1 ? " tours" : " tour") : "sans arrivée"); }
     if (!$("choix-echauffement").hidden && $("echauffement").checked) p.push("échauffement");
   }
@@ -310,12 +312,12 @@ new ResizeObserver(() => majAccueilB()).observe($("am-profil"));   // aussi quan
 document.querySelectorAll(".modes .mode").forEach((b) => { b.title = b.querySelector("span").textContent; });
 function majResumeChoixDetail() {
   const m = MONDES.find((x) => x.id === mondeChoisiId);
-  $("resume-choix-titre").textContent = MODES_SORTIE[$("peloton-mode").value] + (m ? " · " + m.nom : "");
+  $("resume-choix-titre").textContent = MODES_SORTIE[$("peloton-mode").value] + (typeof Formats !== "undefined" && Formats.nom() && $("course-format").value !== "classique" ? " · " + Formats.nom() : "") + (m ? " · " + m.nom : "");
   if (!m) { $("resume-choix-detail").textContent = "Choisis un monde dans la liste."; return; }
   const r = m.route || routeTest();
   // course sur une boucle : nombre de tours jusqu'à l'arrivée (0 = sans arrivée), avec la distance totale
   const pm = $("peloton-mode").value, clm = pm === "clm", tourM = pm === "tour", course = pm === "course" || clm, nt = parseInt($("peloton-tours").value, 10) || 0;
-  $("choix-tours").hidden = !course || !r.boucle;
+  $("choix-tours").hidden = !course || !r.boucle || (typeof Formats !== "undefined" && Formats.sansTours());   // (v94) élimination et poursuite : longueur imposée
   $("choix-echauffement").hidden = !course;
   $("peloton-tours").options[0].hidden = clm;                                 // contre-la-montre : toujours une arrivée
   if (clm && nt === 0) $("peloton-tours").value = "1";
@@ -325,7 +327,7 @@ function majResumeChoixDetail() {
   if (tourM) { $("resume-choix-detail").textContent = typeof Tour !== "undefined" ? Tour.resume() : ""; return; }
   const dep = parseFloat($("depart-km").value) || 0, sc = clm ? null : seanceChoisie();
   $("resume-choix-detail").textContent = fr1(r.longueur / 1000) + " km · D+ " + Math.round(r.dplus) + " m · " + (r.boucle ? "boucle" : "aller simple") + (dep > 0 ? " · départ au km " + fr1(dep / 1000) : "") + ($("peloton-mode").value === "fantome" ? (lirePRDe(r) ? " · record à battre : " + formatDuree(Math.round(lirePRDe(r).t)) + (r.boucle ? " le tour" : "") : " · pas encore de record : ce premier passage le créera") : "") + (course && $("echauffement").checked ? " · échauffement 10 min" : sc ? " · séance « " + sc.vrai + " » en ERG" : "")
-    + (course && r.boucle ? (nt ? " · arrivée après " + nt + (nt > 1 ? " tours" : " tour") + " (" + fr1(nt * r.longueur / 1000) + " km)" : " · sans arrivée") : "");
+    + (course && r.boucle && !(typeof Formats !== "undefined" && Formats.sansTours()) ? (nt ? " · arrivée après " + nt + (nt > 1 ? " tours" : " tour") + " (" + fr1(nt * r.longueur / 1000) + " km)" : " · sans arrivée") : "");
 }
 $("btn-cest-parti").addEventListener("click", () => {
   if (!MONDES.some((m) => m.id === mondeChoisiId)) choisirMonde(MONDES[0].id);

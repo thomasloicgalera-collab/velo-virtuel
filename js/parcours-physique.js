@@ -264,8 +264,11 @@ const Peloton = (function () {
   // maillots : couleurs bien distinctes (pas d'orange, réservé à l'utilisateur), mélangées à chaque sortie
   const PALETTE = [0x9b59b6, 0xe74c3c, 0x16a085, 0xf1c40f, 0x2e86de, 0xe84393, 0x7bc043, 0x34495e, 0xecf0f1, 0x222831, 0x00cec9, 0x8e5a3c];
   let boucleC = false, toursC = 0;   // course sur une boucle : nombre de tours jusqu'à l'arrivée (0 = sans arrivée)
-  const sansFin = () => boucleC && !toursC;
-  const longueurCourse = () => boucleC ? (toursC ? toursC * L : Infinity) : L - d0;   // aller simple : arrivée au bout du parcours, même avec un départ en cours de route
+  // (v94) formats de course (js/formats.js) : `fmtHook` ajuste la puissance visée (cible), la ligne d'arrivée de chacun (fin) ; `lcFixe` = longueur imposée de la course (m)
+  let fmtHook = null, lcFixe = 0;
+  const sansFin = () => !lcFixe && boucleC && !toursC;
+  const longueurCourse = () => lcFixe > 0 ? lcFixe : boucleC ? (toursC ? toursC * L : Infinity) : L - d0;
+  const finDe = (r) => fmtHook && fmtHook.fin ? fmtHook.fin(r) : d0 + longueurCourse();   // aller simple : arrivée au bout du parcours, même avec un départ en cours de route
   // vélos des coureurs virtuels : même catégorie que celui de l'utilisateur (route ou contre-la-montre, suivie en direct),
   // modèle et roues choisis selon leur profil (poids et gain d'air de PERF_VELOS / PERF_ROUES, comme pour l'utilisateur)
   const VELOS_IA = {
@@ -296,6 +299,7 @@ const Peloton = (function () {
   }
   function demarrer(o) {
     boucleC = !!o.boucle; toursC = boucleC ? Math.max(0, o.tours | 0) : 0;
+    fmtHook = o.hook || null; lcFixe = o.longueurFixe || 0;
     if (o.mode === "clm" && boucleC) toursC = Math.max(1, toursC);    // contre-la-montre : toujours une arrivée
     mode = o.mode || "aucun"; d0 = o.d0 || 0; L = o.longueur || 0; pente = o.pente || (() => 0);
     ftpUser = o.ftp || 200; poidsUser = o.poids || 75; wpUser = o.wprime || 14841; t = 0; parti = false; coureurs = []; user = { d: d0, v: 0, fin: null, vue: false, voie: 0.9, pass: [0] };
@@ -422,8 +426,8 @@ const Peloton = (function () {
   const equipiers = () => tttC || enEquipeC ? coureurs.filter((r) => r.eq === 0).map((r) => ({ nom: r.nom, ecart: r.d - user.d })).sort((a, b) => b.ecart - a.ecart) : [];
 
   // (v69 suite) contre-la-montre : allure tenue jusqu'à l'arrivée (≈ 107 % du FTP pour 20 min, 100 % pour une heure), plus fort en montée, réserve vidée à la fin
-  function cibleClm(r) {
-    const rest = d0 + longueurCourse() - r.d, g = pente(r.d), cp = cpEff(r);
+  function cibleClm(r, fin) {
+    const rest = (fin === undefined ? d0 + longueurCourse() : fin) - r.d, g = pente(r.d), cp = cpEff(r);
     if (rest <= 0) { r.etat = "Arrivé"; return cp * 0.4; }
     const T = rest / Math.max(r.v, 7), pct = borner(1 - 0.045 * Math.log2(T / 3600), 0.85, 1.15);
     let p = pct * cp * (1 + 0.08 * borner(g / 6, -1.5, 1));
@@ -679,8 +683,9 @@ const Peloton = (function () {
         r.v = 0; r.P = 0; r.cad = 0; r.d = d0 - 4 - 1.6 * r.rangDep; r.etat = "Départ dans " + Math.ceil(r.tDep - t) + " s"; continue;
       }
       if (mode === "clm" && !r.partiClm) { r.partiClm = true; r.d = d0; r.pass = [0]; }
-      if (r.fini !== null) { r.cible = cpEff(r) * 0.35; r.etat = "Arrivé"; }
-      else r.cible = mode === "course" ? cibleCourse(r, dt) : mode === "clm" ? cibleClm(r) : cibleZ2(r);
+      if (r.cache) continue;                               // (v94) coureur éliminé et retiré de la route
+      if (r.fini !== null) { r.cible = cpEff(r) * 0.35; r.etat = r.elim ? "Éliminé" : "Arrivé"; }
+      else r.cible = mode === "course" ? (fmtHook && fmtHook.cible ? fmtHook.cible(r, cibleCourse(r, dt), dt) : cibleCourse(r, dt)) : mode === "clm" ? cibleClm(r) : cibleZ2(r);
       // (v86) tes coéquipiers (course en équipe) restent près de toi : devant toi, ils lèvent le pied jusqu'aux 3 derniers km
       if (r.equipier && mode === "course" && r.fini === null && user.vue) {
         const ec = r.d - user.d, restant = d0 + longueurCourse() - r.d;
@@ -728,7 +733,7 @@ const Peloton = (function () {
       r.ab = ab;
 
       r.cad = r.v > 0.5 ? borner(72 + 22 * (r.P / cp - 0.6), 60, 112) : 0;
-      if (mode === "course" && !sansFin() && r.fini === null && r.d >= d0 + longueurCourse()) { r.fini = t; }
+      if (mode === "course" && !sansFin() && r.fini === null && r.d >= finDe(r)) { r.fini = t; }
       if (mode === "clm" && r.fini === null && r.d >= d0 + longueurCourse()) r.fini = t - r.tDep;   // temps de son propre chrono
     }
     eviter(dt);
@@ -797,9 +802,12 @@ const Peloton = (function () {
     l.push({ nom: "Toi", couleur: 0xff7a2f, temps: user.fin === null ? Infinity : user.fin, user: true, eq: equipeUser() });
     return l.sort((a, b) => a.temps - b.temps);
   }
+  // (v94) coureur éliminé (course à l'élimination) : il lève le pied, puis disparaît de la route 6 s plus tard
+  function eliminer(r) { if (r.elim) return; r.elim = true; r.fini = t; r.tElim = t; r.etat = "Éliminé"; }
+  function retirer(r) { r.cache = true; r.d = d0 - 5000; r.v = 0; r.P = 0; r.cad = 0; }
   const actif = () => mode !== "aucun" && coureurs.length > 0;
   const majVelos = () => { for (const r of coureurs) veloIA(r); };
-  return { TYPES, NOMS_EQUIPES, KITS_EQUIPES, MAX_IA, tempsEquipes, equipiers, ttt: () => tttC, finaliser, classementFinal, tirerEquipe, tempsEstime, regler, abriPour, procheDe, majVelos, demarrer, maj, classement, actif, coureurs: () => coureurs, mode: () => mode, tours: () => toursC, longueurCourse, depart: () => d0, longueur: () => L, temps: () => t, parti: () => parti };
+  return { cpEff, plafond, puissancePour, cibleClm, eliminer, retirer, finDe, user: () => user, TYPES, NOMS_EQUIPES, KITS_EQUIPES, MAX_IA, tempsEquipes, equipiers, ttt: () => tttC, finaliser, classementFinal, tirerEquipe, tempsEstime, regler, abriPour, procheDe, majVelos, demarrer, maj, classement, actif, coureurs: () => coureurs, mode: () => mode, tours: () => toursC, longueurCourse, depart: () => d0, longueur: () => L, temps: () => t, parti: () => parti };
 })();
 
 const balade = { enCours: false, auto: false, immobile: 0, distance: 0, vitesse: 0, temps: 0, altitude: 0, dernier: maintenant(), tick: maintenant(), cadence: null };

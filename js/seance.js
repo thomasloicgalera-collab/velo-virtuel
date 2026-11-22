@@ -24,6 +24,12 @@ const BIBLIO = [
   { cat: "VO2max et anaérobie", nom: "Sprints 8 × 15 s", desc: "Sprints explosifs, longue récupération.", blocs: [[10, 50, 70], ...rep(8, [[0.25, 170], [3.75, 50]]), [5, 50, 40]] },
   { cat: "Tests", nom: "Test FTP 20 minutes", desc: "Échauffement, 5 min d’effort libre pour « vider les jambes », récupération, puis 20 min à fond mais régulier. FTP ≈ 95 % de ta puissance moyenne sur les 20 min. Pendant les efforts libres, le home trainer reste à 0 % de pente : tu choisis ton braquet.", blocs: [[12, 50, 70], [5, 100, undefined, true], [10, 50], [20, 100, undefined, true], [5, 45]] },
   { cat: "Tests", nom: "Test FTP 2 × 8 minutes", desc: "Deux efforts libres de 8 min, réguliers et à fond. FTP ≈ 90 % de ta meilleure moyenne sur 8 min. Plus court et plus facile à faire que le test de 20 min.", blocs: [[12, 50, 70], [8, 100, undefined, true], [10, 50], [8, 100, undefined, true], [5, 45]] },
+  // (v95) séances « sur le parcours » : la puissance cible suit ta position sur le route (`dyn`) ; `blocs` = aperçu seulement
+  { cat: "Sur le parcours", nom: "Suivre le profil – endurance", desc: "La puissance cible suit la pente du parcours : 58 % du FTP à plat, plus dans les montées (+3,5 points par % de pente), moins dans les descentes. Le home trainer t’impose les watts : tu sens le relief sans jamais exploser. Choisis un parcours qui vallonne.", blocs: [[10, 55], [6, 70], [4, 58], [8, 78], [12, 58]], dyn: { type: "profil", base: 58, k: 3.5 } },
+  { cat: "Sur le parcours", nom: "Suivre le profil – tempo", desc: "Comme « Suivre le profil – endurance » mais plus soutenu : 72 % du FTP à plat, +3 points par % de pente. Une vraie séance de tempo qui épouse le relief.", blocs: [[10, 70], [6, 82], [4, 72], [8, 90], [12, 72]], dyn: { type: "profil", base: 72, k: 3 } },
+  { cat: "Sur le parcours", nom: "Efforts en montée – tempo (85 %)", desc: "Tu roules tranquille (55 %) entre les montées ; dès que le parcours monte, la cible passe à 85 % du FTP jusqu’au sommet, puis tu récupères. Les montées sont celles du parcours (segments chronométrés). Montée annoncée 200 m avant.", blocs: [[8, 55], [6, 85], [4, 55], [6, 85], [4, 55], [6, 85], [8, 50]], dyn: { type: "montees", effort: 85, recup: 55 } },
+  { cat: "Sur le parcours", nom: "Efforts en montée – seuil (98 %)", desc: "Récupération à 55 % entre les montées, puis 98 % du FTP à chaque montée jusqu’au sommet. Des intervalles au seuil posés exactement là où le parcours monte.", blocs: [[8, 55], [7, 98], [4, 55], [7, 98], [4, 55], [7, 98], [8, 50]], dyn: { type: "montees", effort: 98, recup: 55 } },
+  { cat: "Sur le parcours", nom: "Efforts en montée – VO2 (112 %)", desc: "Récupération à 50 % entre les montées, puis 112 % du FTP à chaque montée : très dur, prévois des montées courtes (Mur de Huy, Ardennes) ou arrête-toi avant le sommet avec la touche N.", blocs: [[8, 50], [3, 112], [4, 50], [3, 112], [4, 50], [3, 112], [8, 50]], dyn: { type: "montees", effort: 112, recup: 50 } },
   { cat: "Tests", nom: "Test en rampe", desc: "La puissance monte jusqu’à l’épuisement : ton meilleur 1 min × 0,75 estime le FTP.", blocs: [[5, 45], [20, 50, 130], [5, 40]] }
 ];
 const blocsVersIntervalles = (blocs) => blocs.map(([min, pct, fin, libre, fc]) => {
@@ -88,7 +94,57 @@ function rendreSeance() {
   dessinerSeance();
 }
 
+/* ----- (v95) séances qui suivent le parcours : la puissance cible dépend de la position (pente, ou montées détectées) ----- */
+function montéesDyn() {
+  if (route._montDyn && route._montDynL === route.longueur) return route._montDyn;
+  let l = [];
+  try { l = Progression.segmentsRoute().filter((s) => s.type === "montee").sort((a, b) => a.s - b.s); } catch (e) { l = []; }
+  route._montDyn = l; route._montDynL = route.longueur;
+  return l;
+}
+function majErgDyn() {
+  const dyn = seance.dyn, d = balade.distance, L = route.longueur, W = ftp();
+  let pct = dyn.recup || dyn.base || 55, cible = "", lignes = [], etat = "plat";
+  if (dyn.type === "profil") {
+    const g = (penteA(d) + penteA(d + 120)) / 2;
+    pct = borner(dyn.base + dyn.k * g, 45, 110);
+    cible = "suit le profil · " + Math.round(pct) + " %";
+    lignes.push("Pente " + fr1(penteA(d)) + " %", "Cible " + Math.round(pct) + " % du FTP");
+    etat = g > 3 ? "montee" : "plat";
+  } else {
+    const x = route.boucle ? ((d % L) + L) % L : d, cs = montéesDyn();
+    const cur = cs.find((c) => x >= c.s && x <= c.e);
+    let suiv = cs.find((c) => c.s > x), ds = suiv ? suiv.s - x : Infinity;
+    if (!suiv && route.boucle && cs.length) { suiv = cs[0]; ds = L - x + suiv.s; }
+    if (!cs.length) { cible = "aucune montée sur ce parcours"; lignes.push("Pas de montée détectée", "choisis un parcours qui monte"); }
+    else if (cur) {
+      pct = dyn.effort; etat = "montee";
+      cible = "montée · " + Math.round(pct) + " %";
+      lignes.push("Montée : " + cur.nom, "Sommet dans " + (cur.e - x >= 1000 ? fr1((cur.e - x) / 1000) + " km" : Math.round(cur.e - x) + " m"), "Cible " + Math.round(pct) + " % du FTP");
+    } else {
+      pct = dyn.recup;
+      if (suiv && ds < 200) pct = dyn.recup + (dyn.effort - dyn.recup) * (1 - ds / 200);         // les 200 m avant la montée : on monte en puissance
+      cible = "récupération · " + Math.round(pct) + " %";
+      lignes.push("Récupération", suiv ? "Montée « " + suiv.nom + " » dans " + (ds >= 1000 ? fr1(ds / 1000) + " km" : Math.round(ds) + " m") : "Plus de montée", "Cible " + Math.round(pct) + " % du FTP");
+    }
+    if (!cs.length && !seance.dynAvert) { seance.dynAvert = true; log("Séance « " + seance.nom + " » : aucune montée détectée sur ce parcours, la cible reste à la récupération."); }
+  }
+  const watts = Math.round(pct * W / 100 * (seance.k || 1));
+  envoyerPuissanceCible(watts);
+  seance.dynInfo = { cible, lignes, watts };
+  seance.cibleW = watts; seance.ergVu = true;
+  if (seance.dynEtat !== null && seance.dynEtat !== etat && dyn.type === "montees" && typeof annoncer === "function" && !$("onglet-world").hidden) {
+    annoncer(etat === "montee" ? "Montée : effort !" : "Sommet : récupère", etat === "montee" ? Math.round(pct) + " % du FTP jusqu’au sommet (" + watts + " W)" : "retour à " + Math.round(dyn.recup) + " % du FTP", "", 4);
+  }
+  seance.dynEtat = etat;
+  $("pente-affichee").innerHTML = watts + "&nbsp;W";
+  $("pente-envoyee").textContent = trainer.pret ? "Puissance cible imposée au home trainer : " + cible + "." : "Home trainer non connecté : la puissance cible n’est pas envoyée.";
+  $("etat-seance").textContent = "Séance qui suit le parcours : " + (seance.nom || "") + ".";
+  $("a-venir").textContent = lignes.join(" · ");
+}
+
 function majAffichageErg() {
+  if (seance.dyn) { majErgDyn(); return; }                      // (v95) séance qui suit le parcours
   const t = balade.temps - seance.t0;
   const total = dureeSeance();
   if (!seance.intervalles.length) {
@@ -105,7 +161,7 @@ function majAffichageErg() {
     // (v69 suite) test FTP terminé : estimation proposée (dans l'annonce, puis dans le résumé de fin avec un bouton pour l'appliquer)
     const tt = seance.saute ? null : typeTest(seance.intervalles), est = tt ? estimationFtp(meilleuresPuissances(session.samples), tt) : null;
     seance.ftpTest = est && est.w > 50 ? est : null;
-    if (seance.ftpTest) log("Test FTP terminé : FTP estimé à " + est.w + " W (" + est.txt + "). Tu peux l’appliquer dans le résumé de fin de sortie.");
+    if (seance.ftpTest) { log("Test FTP terminé : FTP estimé à " + est.w + " W (" + est.txt + "). Tu peux l’appliquer dans le résumé de fin de sortie."); proposerFtp(est); }
     if (typeof annoncer === "function" && !$("onglet-world").hidden) annoncer(seance.ftpTest ? "Test terminé : FTP " + est.w + " W" : "Séance terminée", seance.ftpTest ? "Ton FTP actuel : " + ftp() + " W · à valider à la fin de la sortie" : seance.nom || "Bravo !", "arrivee", 8);
     document.querySelector("input[name=mode][value=route]").checked = true;
     reinitialiserEnvois();
@@ -118,6 +174,7 @@ function majAffichageErg() {
     if (t - m[0] < 10 && typeof annoncer === "function") annoncer(m[1], "", "", Math.min(30, Math.max(4, m[2] || 8)));
   }
   if (cur.iv.libre) {
+    seance.cibleW = 0; seance.ergVu = true;
     envoyerPenteValeur(0);
     $("pente-affichee").innerHTML = "Libre";
     $("pente-envoyee").textContent = "Effort libre : choisis ton braquet, à fond mais régulier. Reste " + formatDuree(cur.reste) + ".";
@@ -129,6 +186,8 @@ function majAffichageErg() {
   let watts = Math.round(pctA(cur.iv, 1 - cur.reste / (cur.iv.min * 60)) * ftp() / 100 * (seance.k || 1));   // seance.k : intensité réglée au clavier (↑ ↓)
   if (cur.iv.fc) watts = puissancePourFc(cur, watts);
   envoyerPuissanceCible(watts);
+  if (seance.cibleW !== watts) seance.cibleDepuis = balade.temps;      // (v97) alertes : on laisse 15 s à la cible pour s'installer
+  seance.cibleW = watts; seance.ergVu = true;
   $("pente-affichee").innerHTML = watts + "&nbsp;W";
   $("pente-envoyee").textContent = trainer.pret
     ? "Puissance cible imposée au home trainer, intervalle " + (cur.i + 1) + "/" + seance.intervalles.length + ", reste " + formatDuree(cur.reste)
@@ -220,9 +279,10 @@ function finEchauffement() {                                   // départ de la 
   if (typeof annoncer === "function") annoncer("Départ de la course !", "Échauffement terminé · bonne course", "arrivee", 6);
   log("Échauffement terminé : départ de la course.");
 }
-function chargerSeance(blocs, activerErg, nom, textes) {
+function chargerSeance(blocs, activerErg, nom, textes, dyn) {
   etatFc.i = -1; seance.puisCourse = false; seance.avantEchauf = null; seance.k = 1; seance.saute = false;
-  seance.intervalles = Array.isArray(blocs[0]) ? blocsVersIntervalles(blocs) : blocs.map((x) => Object.assign({}, x));
+  seance.dyn = dyn || null; seance.dynInfo = null; seance.dynEtat = null; seance.ergVu = false; seance.cibleW = 0;     // (v95) séance qui suit le parcours : pas d'intervalles chronométrés
+  seance.intervalles = dyn ? [] : Array.isArray(blocs[0]) ? blocsVersIntervalles(blocs) : blocs.map((x) => Object.assign({}, x));
   if (nom !== undefined) { seance.nom = nom || ""; seance.textes = textes || []; }
   seance.texteI = 0;
   sauverReglages(); rendreSeance();
@@ -233,8 +293,8 @@ function chargerSeance(blocs, activerErg, nom, textes) {
   }
 }
 $("btn-erg-rapide").addEventListener("click", () => {
-  if (!seance.intervalles.length) { log("Aucune séance chargée."); return; }
-  chargerSeance(seance.intervalles, true);
+  if (!seance.intervalles.length && !seance.dyn) { log("Aucune séance chargée."); return; }
+  chargerSeance(seance.intervalles, true, undefined, undefined, seance.dyn);
   choisirSeanceChargee();
 });
 
@@ -246,14 +306,14 @@ function sauverImportees() { try { localStorage.setItem(CLE_SEANCES, JSON.string
 
 /* ----- (v76) Bibliothèque : liste à gauche (filtres par catégorie), détail de la séance choisie à droite ----- */
 const SQ = { filtre: "toutes", sel: "" };
-const SQ_FILTRES = [["toutes", "Toutes"], ["Endurance et récupération", "Endurance"], ["Tempo et sweet spot", "Tempo"], ["Seuil", "Seuil"], ["VO2max et anaérobie", "VO2max"], ["Tests", "Tests"], ["mes", "Mes séances"]];
+const SQ_FILTRES = [["toutes", "Toutes"], ["Endurance et récupération", "Endurance"], ["Tempo et sweet spot", "Tempo"], ["Seuil", "Seuil"], ["VO2max et anaérobie", "VO2max"], ["Tests", "Tests"], ["Sur le parcours", "Sur le parcours"], ["mes", "Mes séances"]];
 const niveauSeance = (IF) => (IF < 0.6 ? "Facile" : IF < 0.75 ? "Modérée" : IF < 0.9 ? "Soutenue" : IF < 1.02 ? "Dure" : "Très dure");
 function itemsBiblio() {
   const l = [];
   seancesImportees.forEach((s, i) => l.push({ cle: "imp:" + s.nom, cat: "mes", nom: s.nom, desc: (s.cree ? "Créée par toi." : "Importée depuis un fichier.") + (s.textes && s.textes.length ? " Contient des messages affichés pendant l’effort." : ""),
     ints: s.ints, textes: s.textes, modif: s.cree && typeof Createur !== "undefined" ? () => Createur.modifier(s) : null,
     suppr: () => { if (!confirm("Supprimer la séance « " + s.nom + " » ?")) return; seancesImportees.splice(i, 1); sauverImportees(); rendreBiblio(); } }));
-  BIBLIO.forEach((b, i) => l.push({ cle: "bib:" + i, cat: b.cat, nom: b.nom, desc: b.desc, ints: blocsVersIntervalles(b.blocs) }));
+  BIBLIO.forEach((b, i) => l.push({ cle: "bib:" + i, cat: b.cat, nom: b.nom, desc: b.desc, ints: blocsVersIntervalles(b.blocs), dyn: b.dyn }));
   return l;
 }
 function rendreBiblio() {
@@ -273,7 +333,7 @@ function rendreBiblio() {
     const b = document.createElement("button"); b.type = "button"; b.className = "sq-item" + (it.cle === SQ.sel ? " sel" : ""); b.dataset.cle = it.cle;
     b.innerHTML = '<span class="sq-t"><b></b><small></small></span><canvas></canvas>';
     b.querySelector("b").textContent = it.nom;
-    b.querySelector("small").textContent = formatDuree(Math.round(st.sec)) + " · " + niveauSeance(st.IF).toLowerCase();
+    b.querySelector("small").textContent = it.dyn ? "suit le parcours · " + niveauSeance(st.IF).toLowerCase() : formatDuree(Math.round(st.sec)) + " · " + niveauSeance(st.IF).toLowerCase();
     b.addEventListener("click", () => { SQ.sel = it.cle; rendreBiblio(); });
     b.addEventListener("dblclick", () => rouleSeance(it));
     conteneur.append(b);
@@ -292,7 +352,8 @@ function rendreDetailSeance(it) {
     '<div class="sq-actions"><button type="button" class="plein" id="sq-rouler">Rouler cette séance ▶</button></div>';
   d.querySelector(".sq-nom").textContent = it.nom;
   d.querySelector(".sq-desc").textContent = it.desc || "";
-  for (const t of [formatDuree(Math.round(st.sec)), "Intensité " + fr2(st.IF), "TSS ≈ " + Math.round(st.tss), niveauSeance(st.IF)]) { const s = document.createElement("span"); s.textContent = t; d.querySelector(".sq-pills").append(s); }
+  for (const t of (it.dyn ? ["Durée selon le parcours", "Intensité ≈ " + fr2(st.IF), niveauSeance(st.IF)] : [formatDuree(Math.round(st.sec)), "Intensité " + fr2(st.IF), "TSS ≈ " + Math.round(st.tss), niveauSeance(st.IF)])) { const s = document.createElement("span"); s.textContent = t; d.querySelector(".sq-pills").append(s); }
+  if (it.dyn) d.querySelector(".sq-ints summary").textContent = "Aperçu d’une séance type (la vraie suit ton parcours)";
   const ol = d.querySelector(".sq-ints ol"); for (const iv of it.ints) { const li = document.createElement("li"); li.textContent = libelleInt(iv); ol.append(li); }
   $("sq-rouler").addEventListener("click", () => rouleSeance(it));
   const act = d.querySelector(".sq-actions");
@@ -308,14 +369,15 @@ function redessinerBiblio() {
   });
 }
 function rouleSeance(it) {                           // charge la séance en mode ERG, retient-la pour la sortie et ouvre la page Rouler
-  chargerSeance(it.ints, true, it.nom, it.textes);
+  chargerSeance(it.ints, true, it.nom, it.textes, it.dyn);
   choisirSeanceChargee();
   log("Séance « " + it.nom + " » chargée : choisis ton parcours puis « C’est parti ».");
   afficherOnglet("world");
   if ($("world-choix").hidden && !session.samples.length) $("btn-changer-monde").click();
 }
 function sqOnglet(nom) {                             // onglets de la page Séances
-  for (const n of ["biblio", "creer", "direct"]) $("sq-" + n).hidden = n !== nom;
+  for (const n of ["biblio", "creer", "direct", "prog"]) $("sq-" + n).hidden = n !== nom;
+  if (nom === "prog" && typeof Programmes !== "undefined") Programmes.rendre();
   document.querySelectorAll("#sq-onglets button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.sq === nom)));
   setTimeout(() => { if (nom === "biblio") redessinerBiblio(); window.dispatchEvent(new Event("resize")); }, 0);
 }
@@ -415,24 +477,24 @@ async function importerSeance(f, charger) {
 /* ----- (v69 suite) choix de la séance sur la page d'accueil : suivie en mode ERG pendant la sortie dans le monde ----- */
 function seancesChoix() {
   const l = [];
-  if (seance.intervalles.length) l.push({ cle: "charge", groupe: "", nom: "Séance chargée" + (seance.nom ? " : " + seance.nom : ""), vrai: seance.nom, ints: seance.intervalles, textes: seance.textes });
+  if (seance.intervalles.length || seance.dyn) l.push({ cle: "charge", groupe: "", nom: "Séance chargée" + (seance.nom ? " : " + seance.nom : ""), vrai: seance.nom, ints: seance.intervalles, textes: seance.textes, dyn: seance.dyn });
   seancesImportees.forEach((s) => l.push({ cle: "imp:" + s.nom, groupe: "Mes séances", nom: s.nom, vrai: s.nom, ints: s.ints, textes: s.textes }));
-  BIBLIO.forEach((b, i) => l.push({ cle: "bib:" + i, groupe: b.cat, nom: b.nom, vrai: b.nom, ints: blocsVersIntervalles(b.blocs) }));
+  BIBLIO.forEach((b, i) => l.push({ cle: "bib:" + i, groupe: b.cat, nom: b.nom, vrai: b.nom, ints: blocsVersIntervalles(b.blocs), dyn: b.dyn }));
   return l;
 }
 let choixSig = "", choixListe = [];
 function majChoixSeanceMonde() {
   const sel = $("seance-monde");
   if (!sel) return;
-  const sig = JSON.stringify([seance.nom, seance.intervalles.length, seancesImportees.map((s) => s.nom), ftp(), fcmax()]);
+  const sig = JSON.stringify([seance.nom, seance.intervalles.length, !!seance.dyn, seancesImportees.map((s) => s.nom), ftp(), fcmax()]);
   if (sig === choixSig && sel.options.length > 1) return;
   choixSig = sig; choixListe = seancesChoix();
-  const garde = sel.value || (modeActuel() === "erg" && seance.intervalles.length ? "charge" : "");
+  const garde = sel.value || (modeActuel() === "erg" && (seance.intervalles.length || seance.dyn) ? "charge" : "");
   sel.innerHTML = '<option value="">Aucune (résistance d’après la pente)</option>';
   let grp = null, nomGrp = null;
   for (const s of choixListe) {
     if (s.groupe !== nomGrp) { nomGrp = s.groupe; grp = s.groupe ? document.createElement("optgroup") : sel; if (s.groupe) { grp.label = s.groupe; sel.append(grp); } }
-    const o = document.createElement("option"); o.value = s.cle; o.textContent = s.nom + " · " + formatDuree(Math.round(s.ints.reduce((a, x) => a + x.min * 60, 0)));
+    const o = document.createElement("option"); o.value = s.cle; o.textContent = s.nom + " · " + (s.dyn ? "suit le parcours" : formatDuree(Math.round(s.ints.reduce((a, x) => a + x.min * 60, 0))));
     grp.append(o);
   }
   sel.value = [...sel.options].some((o) => o.value === garde) ? garde : "";
@@ -445,7 +507,7 @@ function majResumeChoixSeance() { if (typeof majResumeChoix === "function") majR
 function appliquerSeanceChoisie() {
   if (session.samples.length) return;                           // sortie déjà commencée : on ne change rien
   const s = seanceChoisie();
-  if (s) { chargerSeance(s.ints, true, s.vrai, s.textes || []); }
+  if (s) { chargerSeance(s.ints, true, s.vrai, s.textes || [], s.dyn); }
   else if (modeActuel() === "erg") { document.querySelector("input[name=mode][value=route]").checked = true; reinitialiserEnvois(); }
 }
 lireImportees();
@@ -608,12 +670,39 @@ function rendreBilan(c, samples, test, ftpVal, force) {
   }
   c.innerHTML = html;
 }
+/* (v95) FTP : historique des changements et fenêtre proposée à la fin d'un test */
+const CLE_FTP_HIST = "velo_ftp_hist_v1";
+function lireFtpHist() { try { const l = JSON.parse(localStorage.getItem(CLE_FTP_HIST)); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
+function appliquerFtp(w, source) {
+  const avant = ftp();
+  $("ftp").value = w;
+  $("ftp").dispatchEvent(new Event("change"));
+  log("FTP réglé à " + w + " W : zones et séances mises à jour.");
+  if (w !== avant) { const l = lireFtpHist(); l.push({ t: Date.now(), w, avant, source: source || "" }); try { localStorage.setItem(CLE_FTP_HIST, JSON.stringify(l.slice(-40))); } catch (e) { /* ignoré */ } }
+  majFtpHistorique();
+}
+function majFtpHistorique() {
+  const c = $("ftp-historique");
+  if (!c) return;
+  const l = lireFtpHist().slice(-5).reverse();
+  c.textContent = l.length ? "Historique : " + l.map((x) => x.w + " W (" + new Date(x.t).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + ")").join(" ← ") : "";
+}
+function proposerFtp(est) {
+  if (document.getElementById("ftp-modal")) return;
+  const dif = est.w - ftp(), m = document.createElement("div");
+  m.id = "ftp-modal"; m.className = "ftp-modal";
+  m.innerHTML = '<div class="ftp-boite" role="dialog" aria-label="Résultat du test FTP"><h3>Test FTP terminé</h3><p class="ftp-gros">' + est.w + '&nbsp;W</p><p>' + (dif === 0 ? "Identique à ton FTP actuel." : (dif > 0 ? "+" : "") + dif + "&nbsp;W par rapport à ton FTP actuel (" + ftp() + "&nbsp;W).") + '</p><p class="info">' + est.txt + '.</p>' +
+    '<div class="rf-boutons"><button type="button" class="plein" id="ftp-oui">Utiliser ' + est.w + '&nbsp;W</button><button type="button" id="ftp-non">Garder ' + ftp() + '&nbsp;W</button><button type="button" class="petit" id="ftp-plus">Plus tard</button></div></div>';
+  document.body.append(m);
+  const fermer = () => m.remove();
+  $("ftp-oui").onclick = () => { appliquerFtp(est.w, "test"); seance.ftpTest = null; fermer(); };
+  $("ftp-non").onclick = () => { seance.ftpTest = null; fermer(); };
+  $("ftp-plus").onclick = fermer;
+}
 document.addEventListener("click", (e) => {
   const b = e.target.closest && e.target.closest("button[data-ftp]");
   if (!b) return;
-  $("ftp").value = b.dataset.ftp;
-  $("ftp").dispatchEvent(new Event("change"));
-  log("FTP réglé à " + b.dataset.ftp + " W : zones et séances mises à jour.");
+  appliquerFtp(parseInt(b.dataset.ftp, 10), "bouton");
   b.textContent = "FTP mis à jour ✓"; b.disabled = true;
 });
 
@@ -830,3 +919,4 @@ function telecharger(octets, nom) {
   setTimeout(() => URL.revokeObjectURL(lien.href), 2000);
 }
 
+majFtpHistorique();      // (v95)

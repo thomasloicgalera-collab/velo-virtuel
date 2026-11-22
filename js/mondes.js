@@ -330,6 +330,85 @@ function routeChronoCol() {
   r.cotes = [[1000, r.longueur, "Montée du Col"]];
   return tracerVirages(r, { graine: 5253, droit: [30, 240], rayon: [60, 320], angle: [20, 85], capMax: 75, lacets: zonesLacets(r, 6.5, 1500) });
 }
+/* (v96) Constructeur de parcours à côtes nommées : etapes = [["p", longueur, pente], ["c", nom, longueur, pente moyenne, "pave"?], …].
+   Une côte est faite de trois morceaux (pente un peu plus douce au pied et au sommet, plus raide au milieu) ; route.cotes = [début, fin, nom] pour l'encart du HUD,
+   les côtes pavées s'ajoutent à route.secteurs (pavés dessinés sur la route, roulement plus dur). */
+function etapesVersProfil(etapes) {
+  const base = [], cotes = [], secteurs = [];
+  let x = 0;
+  for (const e of etapes) {
+    if (e[0] === "p") { base.push([e[1], e[2]]); x += e[1]; continue; }
+    const [, nom, l, g, pave] = e;
+    base.push([l * 0.3, g * 0.85], [l * 0.4, g * 1.2], [l * 0.3, g * 0.85]);
+    cotes.push([x, x + l, nom]);
+    if (pave) secteurs.push([x, x + l, nom, "pave"]);
+    x += l;
+  }
+  return { base, cotes, secteurs };
+}
+/* L'Alpe d'Huez : 13,9 km de Bourg-d'Oisans à la station, 8 % de moyenne (10 % au pied), environ 1 110 m de D+, 21 lacets numérotés (aller simple, CLM côte par défaut) */
+function routeAlpeHuez() {
+  const base = [[1100, 10.2], [1500, 9.5], [1500, 8.5], [1500, 8], [1400, 7.5], [1400, 8], [1500, 7.5], [1200, 8.5], [1200, 7], [1000, 6], [600, 5.5]];
+  const r = construireRoute("L’Alpe d’Huez", base, false, 720);
+  r.alpes = true; r.synth = true;
+  r.villes = [[-200, 450, "Bourg-d’Oisans"], [r.longueur - 1100, r.longueur + 100, "Alpe d’Huez"]];
+  r.cotes = [[1100, r.longueur, "Montée de l’Alpe d’Huez"]];
+  return tracerVirages(r, { graine: 2121, droit: [30, 240], rayon: [60, 320], angle: [20, 85], capMax: 75, lacets: [[600, 9100]] });
+}
+/* Le Stelvio côté Prato : 24 km à 7,4 % (1 810 m de D+), départ à 915 m, 2 758 m au sommet, une cinquantaine de lacets numérotés */
+function routeStelvio() {
+  const g = [4, 6, 6.5, 7, 7.5, 8, 7.5, 8.5, 7, 8, 8, 7.5, 7, 8, 7.5, 8, 7, 7.5, 8.5, 7, 7.5, 8, 7, 6];
+  const base = g.map((p) => [1000, p]);
+  base.push([300, 3]);
+  let brut = 0;
+  for (const [l, p] of base) brut += l * p / 100;
+  const f = 1810 / brut, r = construireRoute("Passo dello Stelvio", base.map(([l, p]) => [l, p * f]), false, 915);
+  r.alpes = true; r.synth = true;
+  r.villes = [[-200, 600, "Prato allo Stelvio"], [r.longueur - 600, r.longueur + 100, "Passo dello Stelvio"]];
+  r.cotes = [[1000, r.longueur, "Montée du Stelvio"]];
+  return tracerVirages(r, { graine: 4813, droit: [25, 200], rayon: [55, 300], angle: [20, 90], capMax: 75, lacets: [[2300, 22300]] });
+}
+/* Le Mur de Huy (Flèche Wallonne) : boucle de 6,8 km autour de Huy, le mur de 1,3 km à 10 % de moyenne (jusqu'à 12,5 %) */
+function routeHuy() {
+  const { base, cotes } = etapesVersProfil([["p", 1200, 0.4], ["c", "Mur de Huy", 1300, 10], ["p", 600, 0.5], ["p", 1700, -5], ["p", 1100, -3.5], ["p", 900, -1.5]]);
+  const r = construireRoute("Mur de Huy", profilBoucle(base), true, 90);
+  r.synth = true; r.ardennes = true;
+  r.villes = [[0, 1200, "Huy"], [6000, 6800, "Huy"]];
+  r.cotes = cotes;
+  return tracerVirages(r, { graine: 3377, droit: [40, 220], rayon: [40, 180], angle: [25, 100], capMax: 90, boucle: 1,
+    calme: (d) => r.villes.some((v) => d > v[0] - 100 && d < v[1] + 100) ? 1 : 0 });
+}
+/* Liège–Bastogne–Liège (extrait de 72 km, aller simple) : sept côtes de l'Ardenne liégeoise dont Stockeu (12,5 %), la Redoute et la Roche-aux-Faucons */
+function routeLBL() {
+  const { base, cotes } = etapesVersProfil([
+    ["p", 4000, 0.4], ["c", "Côte de Wanne", 2800, 5.8], ["p", 2500, -2.5], ["p", 3500, 0.8], ["p", 1800, -4.5],
+    ["c", "Côte de Stockeu", 1000, 12.5], ["p", 3000, -5], ["p", 3500, 0.5], ["p", 1200, -3],
+    ["c", "Haute-Levée", 3600, 5.7], ["p", 3500, -4], ["p", 2500, 0.6], ["p", 2800, -3.5],
+    ["c", "Côte de Rosier", 4300, 5], ["p", 4500, -3.8], ["p", 3000, 0.4], ["p", 1500, -4],
+    ["c", "Côte de la Redoute", 2000, 8.9], ["p", 2500, -3.8], ["p", 3500, 0.5], ["p", 2000, -4.2],
+    ["c", "Roche-aux-Faucons", 1300, 11], ["p", 2500, -4], ["p", 1800, 0.3], ["p", 1400, -3.2],
+    ["c", "Côte de Saint-Nicolas", 1200, 8.6], ["p", 2000, -2.5], ["p", 2500, 0.2]]);
+  const r = construireRoute("Liège–Bastogne–Liège", base, false, 470);
+  r.synth = true; r.ardennes = true;
+  r.villes = [[-200, 900, "Bastogne"], [18200, 19300, "Houffalize"], [43700, 44800, "Aywaille"], [r.longueur - 1100, r.longueur + 100, "Ans"]];
+  r.cotes = cotes;
+  return tracerVirages(r, { graine: 7019, droit: [40, 300], rayon: [50, 230], angle: [20, 95], capMax: 75,
+    calme: (d) => r.villes.some((v) => d > v[0] - 200 && d < v[1] + 200) ? 1 : 0 });
+}
+/* Tour des Flandres (extrait de 43 km, aller simple) : neuf monts de l'Ardenne flamande, dont l'Oude Kwaremont, le Paterberg (12,9 %), le Koppenberg et le Mur de Grammont, pavés pour la plupart */
+function routeFlandres() {
+  const { base, cotes, secteurs } = etapesVersProfil([
+    ["p", 5000, 0.2], ["c", "Molenberg", 500, 7, "pave"], ["p", 3200, -0.3], ["c", "Berendries", 940, 7], ["p", 3500, -0.5],
+    ["c", "Eikenberg", 1200, 6, "pave"], ["p", 3200, 0.1], ["c", "Oude Kwaremont", 2200, 4, "pave"], ["p", 1500, -0.5], ["c", "Paterberg", 360, 12.9, "pave"], ["p", 3500, -1],
+    ["c", "Koppenberg", 600, 11.6, "pave"], ["p", 3500, -0.8], ["c", "Taaienberg", 530, 6.6, "pave"], ["p", 4200, -0.4],
+    ["c", "Muur de Grammont", 475, 9.3, "pave"], ["p", 3200, -0.6], ["c", "Bosberg", 980, 5.8], ["p", 4500, -0.8]]);
+  const r = construireRoute("Tour des Flandres", base, false, 25);
+  r.synth = true; r.amplitude = 10;
+  r.villes = [[-200, 900, "Audenarde"], [14000, 15000, "Ronse"], [30500, 31500, "Kluisbergen"], [r.longueur - 1100, r.longueur + 100, "Grammont"]];
+  r.cotes = cotes; r.secteurs = secteurs;
+  return tracerVirages(r, { graine: 8821, droit: [120, 600], rayon: [25, 90], angle: [45, 95], capMax: 110,
+    calme: (d) => r.villes.some((v) => d > v[0] - 200 && d < v[1] + 200) ? 1 : 0 });
+}
 /* (v88) petits circuits (moins de 6 km : Critérium, Longchamp, Villenave) : au moins 10 tours, et assez pour faire 40 km au moins (Critérium 14 tours = 42 km,
    Longchamp 12 tours = 42,4 km, Villenave 10 tours = 45 km). null = pas de règle (grands parcours, aller simple). Utilisé par la course contre l'IA et le Tour. */
 function toursConseilles(route) {
@@ -352,6 +431,11 @@ const MONDES = [
   { id: "prologue", nom: "Prologue de la Ville", desc: "Contre-la-montre : 7 km en ville de jour, presque plat, virages à angle droit, départ en rampe", theme: "villej", route: routePrologue(), synth: true, sansDecor: true, integre: true, modeDefaut: "clm" },
   { id: "polders", nom: "CLM des Polders", desc: "Contre-la-montre : 40 km aller-retour sur les digues, plat, demi-tour au milieu, le vent décide de la course", theme: "campagne", route: routePolders(), toursDefaut: 1, synth: true, sansDecor: true, integre: true, modeDefaut: "clm" },
   { id: "chronocol", nom: "Chrono du Col", desc: "Contre-la-montre en montagne : 14,5 km de montée à 7,8 %, 1 140 m de D+, lacets numérotés, arrivée au sommet", theme: "montagne", route: routeChronoCol(), synth: true, sansDecor: true, integre: true, modeDefaut: "clm" },
+  { id: "alpehuez", nom: "L’Alpe d’Huez", desc: "Montagne : 13,9 km de montée à 8 %, 1 110 m de D+, 21 lacets numérotés, arrivée à la station (CLM côte par défaut)", theme: "montagne", route: routeAlpeHuez(), synth: true, sansDecor: true, integre: true, modeDefaut: "clm" },
+  { id: "stelvio", nom: "Passo dello Stelvio", desc: "Montagne : 24 km de montée à 7,4 %, 1 810 m de D+, une cinquantaine de lacets, 2 758 m au sommet", theme: "montagne", route: routeStelvio(), synth: true, sansDecor: true, integre: true },
+  { id: "huy", nom: "Mur de Huy", desc: "Flèche Wallonne : boucle de 6,8 km, le mur de 1,3 km à 10 % de moyenne", theme: "ardennes", route: routeHuy(), synth: true, sansDecor: true, integre: true },
+  { id: "lbl", nom: "Liège–Bastogne–Liège", desc: "Classique : 72 km, sept côtes de l’Ardenne liégeoise (Stockeu, la Redoute, la Roche-aux-Faucons…)", theme: "ardennes", route: routeLBL(), synth: true, sansDecor: true, integre: true },
+  { id: "flandres", nom: "Tour des Flandres", desc: "Classique : 43 km, neuf monts pavés (Oude Kwaremont, Paterberg, Koppenberg, Mur de Grammont…)", theme: "campagne", route: routeFlandres(), synth: true, sansDecor: true, integre: true },
   { id: "desert", nom: "Piste des Dunes", desc: "Désert, boucle de 20 km vallonnée", theme: "desert", route: routeDesert(), synth: true, sansDecor: true, integre: true },
   { id: "triXS", nom: "Triathlon XS", desc: "Désert de Dubaï, boucle de 10 km", theme: "desert", route: routeTriathlon("Triathlon XS", 10, 1101, 60, "desert"), synth: true, sansDecor: true, integre: true },
   { id: "triS", nom: "Triathlon S", desc: "Côte d'Azur (Nice), boucle de 20 km", theme: "mer", route: routeTriathlon("Triathlon S", 20, 2203, 120, "mer"), synth: true, sansDecor: true, integre: true },
@@ -1202,6 +1286,15 @@ function majEtatDecor() {
 }
 function majTuileMonde(m) { majEtatDecor(); if (!$("world-choix").hidden) rendreTuilesMondes(); }
 let mondeChoisiId = null;   // monde sélectionné sur la page d'accueil (lancé par « C'est parti »)
+/* (v96) difficulté d'un parcours : D+ (1 point par 100 m) et distance (1 point par 10 km) ; tri des tuiles par CSS (order) selon la liste #ac-tri */
+function difficulteRoute(r) {
+  const pts = r.dplus / 100 + r.longueur / 10000;
+  return { pts, label: pts < 3 ? "facile" : pts < 8 ? "modéré" : pts < 16 ? "difficile" : pts < 26 ? "très difficile" : "extrême" };
+}
+function ordreTuile(m, r) {
+  const t = $("ac-tri") ? $("ac-tri").value : "defaut", i = MONDES.indexOf(m);
+  return t === "distance" ? Math.round(r.longueur / 100) : t === "denivele" ? 100000 - Math.round(r.dplus) : t === "difficulte" ? Math.round(difficulteRoute(r).pts * 10) : i;
+}
 function rendreTuilesMondes() {
   const cont = $("tuiles-mondes");
   cont.innerHTML = "";
@@ -1212,7 +1305,8 @@ function rendreTuilesMondes() {
     t.dataset.id = m.id; t.classList.toggle("choisi", m.id === mondeChoisiId);
     t.innerHTML = '<canvas></canvas><div class="txt"><div class="nom"></div><div class="resume"></div><div class="detail"></div></div>';
     t.querySelector(".nom").textContent = m.nom;
-    t.querySelector(".resume").textContent = fr1(r.longueur / 1000) + " km · D+ " + Math.round(r.dplus) + " m";
+    t.querySelector(".resume").textContent = fr1(r.longueur / 1000) + " km · D+ " + Math.round(r.dplus) + " m · " + difficulteRoute(r).label;
+    t.style.order = ordreTuile(m, r);
     const det = t.querySelector(".detail");
     if (m.route && !m.synth) {
       det.textContent = m.statut === "chargement" || m.statut === "erreur" || m.statut === "partiel" ? m.msg : (m.statut === "attente" ? "Décor en attente…" : (r.boucle ? "Boucle" : "Aller simple") + " · " + (m.msg || "décor numérisé"));
@@ -1230,7 +1324,13 @@ function rendreTuilesMondes() {
       }
       t.append(barre);
     } else {
-      det.textContent = (r.boucle ? "Boucle" : "Aller simple") + " · " + r.nom;
+      det.textContent = (m.generee ? "Parcours créé par toi · " : "") + (r.boucle ? "Boucle" : "Aller simple") + (m.generee ? "" : " · " + r.nom);
+      if (m.generee) {
+        const barre = document.createElement("div"); barre.className = "tuile-act";
+        const bS = document.createElement("button"); bS.textContent = "✕"; bS.title = "Supprimer ce parcours"; bS.setAttribute("aria-label", "Supprimer ce parcours");
+        bS.addEventListener("click", (e) => { e.stopPropagation(); if (confirm("Supprimer le parcours « " + m.nom + " » ?")) { supprimerMondeGenere(m); rendreTuilesMondes(); } });
+        barre.append(bS); t.append(barre);
+      }
     }
     // un clic choisit le monde, un double-clic (ou Entrée sur le monde déjà choisi) le lance directement
     t.addEventListener("click", () => choisirMonde(m.id));
@@ -1355,3 +1455,81 @@ $("btn-changer-monde").addEventListener("click", async () => {
 });
 window.addEventListener("resize", () => { if (!$("onglet-world").hidden && !$("world-choix").hidden) rendreTuilesMondes(); });
 
+
+/* =====================================================================
+   (v96) Générateur de parcours : distance, dénivelé, boucle ou aller simple, décor ; tracé tiré au hasard (graine gardée), enregistré dans le navigateur
+   ===================================================================== */
+const CLE_GEN = "velo_mondes_gen_v1";
+const VILLES_GEN = ["Saint-Aubin", "Montclair", "Valmont", "La Roche", "Beaulieu", "Les Granges", "Vieilleville", "Courtenay", "Roquefort", "Bellevue", "Sainte-Croix", "Pont-d’Or"];
+function routeGeneree(p) {
+  const rand = aleaGraine(p.graine), L = p.km * 1000, base = [];
+  let tot = 0;
+  while (tot < L) {
+    const l = Math.min(L - tot, 450 + rand() * 1100), u = rand();
+    const g = u < 0.38 ? 1.5 + 6.5 * Math.pow(rand(), 1.2) : u < 0.76 ? -(1.2 + 5.5 * rand()) : (rand() - 0.5) * 1.2;
+    base.push([l, g]); tot += l;
+  }
+  let pos = 0, neg = 0;
+  for (const [l, g] of base) { if (g > 0) pos += l * g / 100; else neg += -l * g / 100; }
+  const f = pos > 0 ? p.dplus / pos : 1;
+  for (const s of base) if (s[1] > 0) s[1] = Math.min(18, s[1] * f);
+  pos = 0; for (const [l, g] of base) if (g > 0) pos += l * g / 100;
+  const net = p.boucle ? 0 : pos * (p.decor === "montagne" ? 0.6 : 0.15), fn = neg > 0 ? (pos - net) / neg : 1;
+  for (const s of base) if (s[1] < 0) s[1] = Math.max(-18, s[1] * fn);
+  const alt0 = { montagne: 700, mer: 4, desert: 180, ardennes: 230, toscane: 210, campagne: 90 }[p.decor] || 90;
+  const r = construireRoute(p.nom, p.boucle ? profilBoucle(base) : base, !!p.boucle, alt0);
+  r.synth = true; r.genere = true;
+  if (p.decor === "montagne") r.alpes = true; else if (p.decor === "mer") r.mer = true; else if (p.decor === "desert") r.desert = true; else if (p.decor === "ardennes") r.ardennes = true; else if (p.decor === "toscane") r.toscane = true;
+  const nv = Math.max(2, Math.min(5, Math.round(p.km / 12))), villes = [];
+  for (let k = 0; k < nv; k++) {
+    const c = k === 0 ? 650 : (k === nv - 1 && p.boucle) ? r.longueur - 450 : r.longueur * (k + 0.3 + 0.4 * rand()) / nv;
+    villes.push([Math.max(100, c - 600), Math.min(r.longueur - 50, c + 600), VILLES_GEN[Math.floor(rand() * VILLES_GEN.length)]]);
+  }
+  r.villes = villes;
+  const o = {
+    montagne: { droit: [30, 260], rayon: [60, 340], angle: [20, 85], capMax: 75, lacets: zonesLacets(r, 6.5, 1500) },
+    mer: { droit: [80, 520], rayon: [130, 520], angle: [12, 55], capMax: 50, rayonGauche: 260 },
+    desert: { droit: [40, 320], rayon: [70, 320], angle: [25, 110], capMax: 80 },
+    ardennes: { droit: [40, 280], rayon: [55, 240], angle: [20, 95], capMax: 75 },
+    toscane: { droit: [80, 520], rayon: [110, 460], angle: [15, 70], capMax: 65 },
+    campagne: { droit: [150, 700], rayon: [60, 300], angle: [15, 80], capMax: 90 }
+  }[p.decor] || { droit: [150, 700], rayon: [60, 300], angle: [15, 80], capMax: 90 };
+  return tracerVirages(r, Object.assign({ graine: p.graine + 17, boucle: p.boucle ? (p.decor === "desert" ? -1 : 1) : undefined, calme: (d) => villes.some((v) => d > v[0] - 200 && d < v[1] + 200) ? 1 : 0 }, o));
+}
+function lireGeneres() { try { const l = JSON.parse(localStorage.getItem(CLE_GEN)); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
+function ecrireGeneres(l) { try { localStorage.setItem(CLE_GEN, JSON.stringify(l.slice(-12))); } catch (e) { /* stockage indisponible */ } }
+function ajouterMondeGenere(p) {
+  const r = routeGeneree(p);
+  const m = { id: p.id, nom: p.nom, desc: "Parcours créé par toi : " + p.km + " km, " + Math.round(r.dplus) + " m de D+", theme: p.decor, route: r, synth: true, sansDecor: true, generee: true, params: p };
+  MONDES.push(m);
+  return m;
+}
+function supprimerMondeGenere(m) {
+  const i = MONDES.indexOf(m);
+  if (i >= 0) MONDES.splice(i, 1);
+  ecrireGeneres(lireGeneres().filter((p) => p.id !== m.id));
+  if (mondeChoisiId === m.id) choisirMonde(MONDES[0].id);
+}
+for (const p of lireGeneres()) { try { ajouterMondeGenere(p); } catch (e) { /* paramètres illisibles : ignorés */ } }
+(function () {
+  const btn = $("gen-creer");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const km = Math.max(5, Math.min(150, parseFloat($("gen-km").value) || 40)), dplus = Math.max(0, Math.min(4000, parseFloat($("gen-dplus").value) || 0));
+    const decor = $("gen-decor").value, boucle = $("gen-type").value === "boucle";
+    const graine = Math.floor(Math.random() * 1e9), nb = lireGeneres().length + 1;
+    const nom = ($("gen-nom").value || "").trim().slice(0, 30) || "Parcours " + nb + " · " + Math.round(km) + " km";
+    const p = { id: "gen-" + Date.now(), nom, km: Math.round(km * 10) / 10, dplus: Math.round(dplus), boucle, decor, graine };
+    let m;
+    try { m = ajouterMondeGenere(p); } catch (e) { $("gen-msg").textContent = "Création impossible : " + e.message; return; }
+    const l = lireGeneres(); l.push(p); ecrireGeneres(l);
+    const r = m.route, d = difficulteRoute(r);
+    $("gen-msg").textContent = "« " + nom + " » créé : " + fr1(r.longueur / 1000) + " km, D+ " + Math.round(r.dplus) + " m, " + (boucle ? "boucle" : "aller simple") + ", " + d.label + ".";
+    $("gen-nom").value = "";
+    rendreTuilesMondes();
+    choisirMonde(m.id);
+    const tu = document.querySelector('#tuiles-mondes .tuile-monde[data-id="' + CSS.escape(m.id) + '"]');
+    if (tu) tu.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  if ($("ac-tri")) $("ac-tri").addEventListener("change", () => rendreTuilesMondes());
+})();
