@@ -1,10 +1,10 @@
 "use strict";
-/* (v75) Service worker : l'application s'installe comme un logiciel et démarre sans Internet.
+/* (v76) Service worker : l'application s'installe comme un logiciel et démarre sans Internet.
    - fichiers de l'application : réseau d'abord (la dernière version publiée arrive tout de suite), copie gardée en secours hors ligne ;
    - bibliothèques CDN (Three.js, PeerJS, html-to-image : adresses versionnées) : copie gardée, réseau seulement la première fois ;
    - tout le reste (décor OpenStreetMap, IGN, serveur PeerJS) passe directement par le réseau, sans copie.
    Changer VERSION à chaque nouvelle version de l'application. */
-const VERSION = "velo-v75";
+const VERSION = "velo-v93";
 const LOCAL = [
   "./", "index.html", "style.css", "manifest.webmanifest",
   "icones/apple-touch-icon.png",
@@ -17,6 +17,7 @@ const LOCAL = [
   "js/createur-seance.js",
   "js/decor.js",
   "js/demarrage.js",
+  "js/garage.js",
   "js/groupe.js",
   "js/historique-interface.js",
   "js/modele-3d.js",
@@ -27,6 +28,7 @@ const LOCAL = [
   "js/outils.js",
   "js/parcours-physique.js",
   "js/photos.js",
+  "js/hud-perso.js",
   "js/progression.js",
   "js/revoir-ecran2.js",
   "js/seance.js",

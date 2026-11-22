@@ -69,12 +69,14 @@ const CLE_REGLAGES = "velo-virtuel-reglages";
 function chargerReglages() {
   try { return JSON.parse(localStorage.getItem(CLE_REGLAGES)) || {}; } catch (e) { return {}; }
 }
+var departApresEchauffement = false;   // (v89) vrai pendant le lancerPeloton qui suit l'échauffement
+var veloAvantClm = null;   // (v86) vélo de route remplacé par un vélo de chrono pour un contre-la-montre : c'est lui qu'on enregistre
 function sauverReglages() {
   try {
     localStorage.setItem(CLE_REGLAGES, JSON.stringify({
       ventActif: $("vent-actif").checked, materielAero: $("materiel-aero").value, ftp: $("ftp").value, autoDepart: $("auto-depart").checked, fcmax: $("fcmax").value, poids: $("poids").value,
       difficulte: $("difficulte").value, descente: $("difficulte-desc").value, autopause: $("auto-pause").checked,
-      monde: $("monde").value, qualite: $("qualite").value, resolution: $("resolution").value, moment: $("moment").value, meteo: $("meteo").value, foule: $("foule").value, saison: $("saison").value, pietons: $("pietons").value, pelotonMode: $("peloton-mode").value, fantomePR: $("fantome-pr").checked, fantomeSeg: $("fantome-seg").checked, echauffement: $("echauffement").checked, freinage: $("freinage").checked, vibrations: $("vibrations").checked, ravito: $("ravito").checked, zonesFcAuto: $("zones-fc-auto").checked, hudTaille: $("hud-taille").value, pelotonNiveau: $("peloton-niveau").value, pelotonTours: $("peloton-tours").value, pelotonNombre: $("peloton-nombre").value, sexe: $("sexe").value, apparence: lireApparence(), age: $("age").value, taille: $("taille").value, avatarMaillot: $("avatar-maillot").value, vue: $("vue-camera").value, poussiere: $("poussiere").checked, son: $("son-actif").checked, volume: $("son-volume").value, affiche3d: $("affiche-3d").checked,
+      monde: $("monde").value, qualite: $("qualite").value, resolution: $("resolution").value, moment: $("moment").value, meteo: $("meteo").value, foule: $("foule").value, saison: $("saison").value, pietons: $("pietons").value, pelotonMode: $("peloton-mode").value, fantomePR: $("fantome-pr").checked, fantomeSeg: $("fantome-seg").checked, echauffement: $("echauffement").checked, freinage: $("freinage").checked, ravito: $("ravito").checked, zonesFcAuto: $("zones-fc-auto").checked, hudTaille: $("hud-taille").value, pelotonNiveau: $("peloton-niveau").value, pelotonTours: $("peloton-tours").value, pelotonNombre: $("peloton-nombre").value, sexe: $("sexe").value, apparence: Object.assign(lireApparence(), veloAvantClm ? { velo: veloAvantClm } : {}), age: $("age").value, taille: $("taille").value, avatarMaillot: $("avatar-maillot").value, vue: $("vue-camera").value, poussiere: $("poussiere").checked, son: $("son-actif").checked, volume: $("son-volume").value, affiche3d: $("affiche-3d").checked,
       intervalles: seance.intervalles
     }));
   } catch (e) { /* stockage indisponible : on ignore */ }
@@ -146,12 +148,14 @@ function decoderDonneesVelo(v) {
 }
 
 let chaineEcriture = Promise.resolve();
+let ecrituresEnAttente = 0;          // (v77) commandes envoyées au home trainer et pas encore acquittées
 function ecrireCommande(octets) {
+  ecrituresEnAttente++;
   chaineEcriture = chaineEcriture.then(() => {
     if (!trainer.cp) return;
     const data = new Uint8Array(octets);
     return trainer.cp.writeValueWithResponse ? trainer.cp.writeValueWithResponse(data) : trainer.cp.writeValue(data);
-  }).catch((e) => log("Commande non envoyée : " + e.message));
+  }).catch((e) => log("Commande non envoyée : " + e.message)).then(() => { ecrituresEnAttente--; });
   return chaineEcriture;
 }
 

@@ -241,15 +241,100 @@ function routeNord() {
   return tracerVirages(r, { graine: 5931, droit: [220, 950], rayon: [20, 70], angle: [55, 95], capMax: 110, boucle: 1,
     calme: (d) => r.villes.some((v) => d > v[0] - 200 && d < v[1] + 200) ? 1 : 0 });
 }
-/* (v69 suite) Col des Pyrénées : aller simple de 23,5 km, 4,5 km de vallée puis une montée de 19 km à 7 % (inspirée du Tourmalet par Luz et Barèges),
-   lacets dans les passages raides, brebis dans les estives (route.brebis) */
+/* (v80) Col des Pyrénées en aller-retour (inspiré du Tourmalet par Luz et Barèges) : 4,5 km de vallée puis 19 km de montée à 7 %, demi-tour au sommet,
+   descente jusqu'au point de départ, demi-tour, et on recommence (parcours en boucle de 47 km). La descente suit la route de la montée, décalée de 26 m
+   près des deux demi-tours (deux chaussées côte à côte, que le décor sait gérer) et confondue avec elle ailleurs (on ne voit jamais les deux ensemble).
+   La table des caps (route.virages) est celle de la montée, puis un demi-cercle à gauche de 41 m, la montée reprise à l'envers, un second demi-cercle. */
+/* (v85) Fabrique d'un aller-retour (utilisée par le Col des Pyrénées et par le CLM des Polders) : montee = profil de l'aller (au moins 10 km), opts(L0) = options
+   de tracerVirages pour l'aller ; renvoie la route en boucle avec ses demi-tours et les repères (L0, f, dep, L2) pour placer les villes. */
+function routeAllerRetour(nom, alt, montee, opts) {
+  const r0 = construireRoute(nom, montee, false, alt);
+  const L0 = Math.round(r0.longueur), W = 26.1, NU = 41;
+  tracerVirages(r0, opts(L0));
+  const t = r0.virages, PI = Math.PI;
+  // la montée, mètre par mètre
+  const P = [[0, 0]], Nm = [];
+  for (let i = 0; i < L0; i++) { const h = (t[i] + t[i + 1]) / 2; P.push([P[i][0] + Math.sin(h), P[i][1] - Math.cos(h)]); Nm.push([-Math.cos(h), -Math.sin(h)]); }
+  const lisse = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+  const ecart = (s) => W * Math.max(1 - lisse((s - 2800) / 2200), lisse((s - (L0 - 5000)) / 2200));
+  const Q = P.map((p, i) => {
+    const a = Nm[Math.max(0, i - 1)], b = Nm[Math.min(L0 - 1, i)], nx = (a[0] + b[0]) / 2, nz = (a[1] + b[1]) / 2, n = Math.hypot(nx, nz) || 1, w = ecart(i);
+    return [p[0] + w * nx / n, p[1] + w * nz / n];
+  }).reverse();                                              // la descente : le tracé décalé, parcouru du sommet vers le départ
+  const R = [Q[0]]; let cur = Q[0], reste = 1;               // points tous les mètres le long de ce tracé
+  for (let j = 1; j < Q.length; j++) {
+    for (;;) {
+      const dx = Q[j][0] - cur[0], dz = Q[j][1] - cur[1], l = Math.hypot(dx, dz);
+      if (l >= reste) { cur = [cur[0] + dx / l * reste, cur[1] + dz / l * reste]; R.push(cur); reste = 1; } else { reste -= l; cur = Q[j]; break; }
+    }
+  }
+  const Lr = R.length - 1;
+  const S = [];                                              // cap de chaque mètre de la boucle entière
+  for (let i = 0; i < L0; i++) S.push((t[i] + t[i + 1]) / 2);
+  const hTop = t[L0];
+  for (let m = 0; m < NU; m++) S.push(hTop - PI * (m + 0.5) / NU);
+  let prec = hTop - PI;
+  for (let i = 0; i < Lr; i++) {
+    let c = Math.atan2(R[i + 1][0] - R[i][0], -(R[i + 1][1] - R[i][1]));
+    c += 2 * PI * Math.round((prec - c) / (2 * PI)); prec = c; S.push(c);
+  }
+  for (let m = 0; m < NU; m++) S.push(prec - PI * (m + 0.5) / NU);
+  const L2 = S.length, T = new Float32Array(L2 + 62);
+  T[0] = t[0];
+  for (let i = 1; i < L2; i++) T[i] = (S[i - 1] + S[i]) / 2;
+  T[L2] = S[L2 - 1] + (S[L2 - 1] - S[L2 - 2]) / 2;
+  for (let i = L2 + 1; i < T.length; i++) T[i] = T[L2];
+  // profil : montée, demi-tour plat, la montée à l'envers (pentes inversées), demi-tour plat
+  const f = Lr / L0, retour = montee.slice().reverse().map(([l, p]) => [Math.round(l * f), -p]);
+  retour[retour.length - 1][0] += Lr - retour.reduce((a, s) => a + s[0], 0);
+  const r = construireRoute(nom, profilBoucle([...montee, [NU, 0], ...retour, [NU, 0]]), true, alt);
+  r.synth = true; r.virages = T; r.tourCap = T[L2] - T[0]; r.epingles = r0.epingles;
+  return { r, L0, f, dep: L0 + NU, L2 };
+}
 function routePyrenees() {
   const g = [5.5, 6.5, 7, 6, 7, 7.5, 5.5, 6.5, 5, 7.5, 8, 7.5, 6.5, 7.5, 8, 8.5, 7, 7.5, 9];
-  const r = construireRoute("Col des Pyrénées", [[1200, 1], [1800, 2], [1500, 3], ...g.map((p) => [1000, p])], false, 710);
-  r.synth = true; r.brebis = true;
-  r.villes = [[0, 1000, "Luz-Saint-Sauveur"], [11300, 12300, "Barèges"], [18000, 18700, "Super-Barèges"]];
-  r.cotes = [[4500, 23500, "Montée du Tourmalet"]];
-  return tracerVirages(r, { graine: 8123, droit: [30, 240], rayon: [50, 300], angle: [20, 90], capMax: 75, lacets: [[6200, 10600], [13000, 17400], [19200, 23000]] });
+  const montee = [[1200, 1], [1800, 2], [1500, 3], ...g.map((p) => [1000, p])];
+  // pas de lacets dans les 5 derniers km (la descente y est décalée de 26 m) : courbes larges
+  const { r, L0, f, dep, L2 } = routeAllerRetour("Col des Pyrénées", 710, montee, (L0) => ({ graine: 8123, droit: [30, 240], rayon: [50, 300], angle: [20, 90], capMax: 75, lacets: [[6200, 10600], [13000, 17400]], calme: (d) => (d > L0 - 5600 ? 1 : 0) }));
+  r.brebis = true;
+  const sym = (a, b, nom) => [dep + (L0 - b) * f, dep + (L0 - a) * f, nom];
+  r.villes = [[-300, 1000, "Luz-Saint-Sauveur"], [11300, 12300, "Barèges"], [18000, 18700, "Super-Barèges"],
+    sym(18000, 18700, "Super-Barèges"), sym(11300, 12300, "Barèges"), [dep + (L0 - 1000) * f, L2 + 300, "Luz-Saint-Sauveur"]];
+  r.cotes = [[4500, L0, "Montée du Tourmalet"]];
+  return r;
+}
+/* (v85) Trois parcours de contre-la-montre (modeDefaut « clm » : le mode est choisi tout seul quand on les sélectionne ; départs toutes les 30 s).
+   1. Prologue de la Ville : 7 km en ville de jour, presque plat, virages à angle droit (aller simple).
+   2. CLM des Polders : 40 km aller-retour sur les digues, plat, demi-tour au milieu (boucle de 1 tour, vent selon la météo).
+   3. Chrono du Col : montée sèche de 14,5 km à 7,8 % de moyenne (1 140 m de D+), lacets numérotés, passage à 10 %, replat avant les derniers km. */
+function routePrologue() {
+  const base = [[900, 0.3], [800, -0.4], [700, 0.5], [900, -0.2], [800, 0.4], [900, -0.5], [800, 0.3], [1200, -0.1]];
+  const r = construireRoute("Prologue de la Ville", base, false, 35);
+  r.synth = true; r.villeN = true;
+  r.villes = [[0, r.longueur + 100, "Centre-ville"]];
+  return tracerVirages(r, { graine: 3319, droit: [110, 360], rayon: [16, 30], angle: [75, 95], capMax: 170 });
+}
+function routePolders() {
+  // aller de 20 km : digues rectilignes, gain nul sur l'aller-retour (le retour inverse les pentes)
+  const g = [0.1, -0.1, 0.15, -0.05, 0.1, -0.15, 0.05, 0.1, -0.1, 0.1, -0.05, 0.15, -0.1, 0.05, -0.1, 0.1, -0.05, 0.1, -0.15, 0.1];
+  const { r, L0, f, dep, L2 } = routeAllerRetour("CLM des Polders", 3, g.map((p) => [1000, p]), (L0) => ({ graine: 6607, droit: [700, 2600], rayon: [500, 1100], angle: [6, 22], capMax: 28 }));
+  r.amplitude = 4;
+  const sym = (a, b, nom) => [dep + (L0 - b) * f, dep + (L0 - a) * f, nom];
+  r.villes = [[100, 1200, "Zierikzee"], [8800, 9800, "Brouwershaven"], sym(8800, 9800, "Brouwershaven"), [dep + (L0 - 1000) * f, L2 + 300, "Zierikzee"]];
+  return r;
+}
+function routeChronoCol() {
+  const base = [[1000, 3], [1500, 6.5], [1500, 8], [1500, 9], [1500, 10.5], [1500, 10], [1500, 8], [1000, 5], [1500, 7.5], [1500, 9], [500, 6]];
+  const r = construireRoute("Chrono du Col", base, false, 700);
+  r.alpes = true; r.synth = true;
+  r.cotes = [[1000, r.longueur, "Montée du Col"]];
+  return tracerVirages(r, { graine: 5253, droit: [30, 240], rayon: [60, 320], angle: [20, 85], capMax: 75, lacets: zonesLacets(r, 6.5, 1500) });
+}
+/* (v88) petits circuits (moins de 6 km : Critérium, Longchamp, Villenave) : au moins 10 tours, et assez pour faire 40 km au moins (Critérium 14 tours = 42 km,
+   Longchamp 12 tours = 42,4 km, Villenave 10 tours = 45 km). null = pas de règle (grands parcours, aller simple). Utilisé par la course contre l'IA et le Tour. */
+function toursConseilles(route) {
+  if (!route || !route.boucle || !(route.longueur > 0) || route.longueur >= 6000) return null;
+  return Math.max(10, Math.ceil(40000 / route.longueur));
 }
 const MONDES_INTEGRES = [
   { id: "longchamp", nom: "Longchamp", gpx: [[48.854169,2.237365,37.6],[48.853788,2.237253,37.6],[48.852911,2.236896,37.0],[48.852482,2.236787,36.4],[48.852167,2.236798,35.9],[48.851925,2.236866,35.5],[48.851805,2.236823,35.3],[48.851684,2.236776,35.1],[48.851572,2.236655,34.9],[48.851533,2.236589,34.9],[48.851413,2.236212,34.5],[48.851414,2.235564,33.8],[48.851451,2.234978,33.3],[48.85153,2.234335,32.6],[48.851651,2.233595,32.1],[48.851804,2.232884,31.7],[48.851985,2.23218,31.4],[48.85221,2.231472,31.0],[48.852385,2.231062,30.9],[48.852597,2.23068,30.9],[48.852858,2.23034,30.8],[48.853234,2.229932,30.7],[48.853822,2.229388,30.5],[48.854123,2.229173,30.3],[48.854573,2.22893,30.1],[48.855336,2.228661,29.8],[48.855642,2.228588,29.8],[48.856277,2.228523,29.9],[48.856728,2.228553,29.9],[48.857318,2.228672,29.8],[48.857593,2.228742,29.8],[48.858124,2.228911,29.7],[48.858909,2.22922,29.6],[48.859738,2.229562,29.8],[48.859757,2.22957,29.8],[48.860658,2.229876,30.1],[48.861218,2.230142,30.3],[48.861376,2.230219,30.4],[48.861963,2.230541,30.7],[48.862125,2.23063,30.8],[48.862564,2.230898,30.9],[48.862929,2.231313,30.9],[48.863111,2.231567,31.0],[48.863443,2.232112,31.0],[48.863625,2.232521,31.0],[48.863677,2.232661,30.9],[48.863804,2.233078,30.6],[48.863884,2.23344,30.3],[48.864,2.23432,29.8],[48.864054,2.235337,29.3],[48.864025,2.235762,29.3],[48.86394,2.236058,29.2],[48.863742,2.236719,29.2],[48.86363,2.236967,29.2],[48.863505,2.237146,29.2],[48.863143,2.237521,29.3],[48.862583,2.237967,30.0],[48.862457,2.238022,30.1],[48.862294,2.238026,30.3],[48.862212,2.23802,30.3],[48.862059,2.237987,30.5],[48.861822,2.237932,30.7],[48.860912,2.237386,30.9],[48.860437,2.237175,30.8],[48.859961,2.237014,30.8],[48.859373,2.236945,31.4],[48.858944,2.236975,31.9],[48.858869,2.236987,32.0],[48.858483,2.237072,32.4],[48.856569,2.237493,36.2],[48.856165,2.237534,36.7],[48.855377,2.237539,36.7],[48.854323,2.23741,36.7],[48.854169,2.237365,36.7]] },
@@ -262,8 +347,11 @@ const MONDES = [
   { id: "ardennes", nom: "Boucle des Ardennes", desc: "Forêt des Ardennes, boucle de 25 km, 8 côtes courtes et raides", theme: "ardennes", route: routeArdennes(), synth: true, sansDecor: true, integre: true },
   { id: "toscane", nom: "Strade Bianche", desc: "Collines de Toscane, boucle de 40 km avec 3 secteurs de chemin blanc", theme: "toscane", route: routeToscane(), synth: true, sansDecor: true, integre: true },
   { id: "nord", nom: "Pavés du Nord", desc: "Plaine du Nord, boucle de 31 km avec 6 secteurs pavés", theme: "campagne", route: routeNord(), synth: true, sansDecor: true, integre: true },
-  { id: "pyrenees", nom: "Col des Pyrénées", desc: "Montagne, 23,5 km, montée de 19 km à 7 %, brebis dans les estives", theme: "montagne", route: routePyrenees(), synth: true, sansDecor: true, integre: true },
-  { id: "criterium", nom: "Critérium de la Ville", desc: "Ville de nuit, circuit plat de 3 km aux virages serrés", theme: "ville", route: routeCriterium(), synth: true, sansDecor: true, integre: true, toursDefaut: 10 },
+  { id: "pyrenees", nom: "Col des Pyrénées", desc: "Montagne, 47 km aller-retour : montée de 19 km à 7 %, demi-tour au sommet, descente, demi-tour", theme: "montagne", route: routePyrenees(), toursDefaut: 1, synth: true, sansDecor: true, integre: true },
+  { id: "criterium", nom: "Critérium de la Ville", desc: "Ville de nuit, circuit plat de 3 km aux virages serrés", theme: "ville", route: routeCriterium(), synth: true, sansDecor: true, integre: true },
+  { id: "prologue", nom: "Prologue de la Ville", desc: "Contre-la-montre : 7 km en ville de jour, presque plat, virages à angle droit, départ en rampe", theme: "villej", route: routePrologue(), synth: true, sansDecor: true, integre: true, modeDefaut: "clm" },
+  { id: "polders", nom: "CLM des Polders", desc: "Contre-la-montre : 40 km aller-retour sur les digues, plat, demi-tour au milieu, le vent décide de la course", theme: "campagne", route: routePolders(), toursDefaut: 1, synth: true, sansDecor: true, integre: true, modeDefaut: "clm" },
+  { id: "chronocol", nom: "Chrono du Col", desc: "Contre-la-montre en montagne : 14,5 km de montée à 7,8 %, 1 140 m de D+, lacets numérotés, arrivée au sommet", theme: "montagne", route: routeChronoCol(), synth: true, sansDecor: true, integre: true, modeDefaut: "clm" },
   { id: "desert", nom: "Piste des Dunes", desc: "Désert, boucle de 20 km vallonnée", theme: "desert", route: routeDesert(), synth: true, sansDecor: true, integre: true },
   { id: "triXS", nom: "Triathlon XS", desc: "Désert de Dubaï, boucle de 10 km", theme: "desert", route: routeTriathlon("Triathlon XS", 10, 1101, 60, "desert"), synth: true, sansDecor: true, integre: true },
   { id: "triS", nom: "Triathlon S", desc: "Côte d'Azur (Nice), boucle de 20 km", theme: "mer", route: routeTriathlon("Triathlon S", 20, 2203, 120, "mer"), synth: true, sansDecor: true, integre: true },

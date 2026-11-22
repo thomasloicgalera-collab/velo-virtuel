@@ -166,7 +166,7 @@ function materielVelo(velo, roues) {
 }
 const Aero = (function () {
   const CDA = 0.34;                                        // position aux cocottes (m²)
-  const CRR = { bitume: 0.0055, gravier: 0.0095, terre: 0.012, pave: 0.012 };   // (v69 suite) pavés du Nord   // route.revetement : à renseigner pour un nouveau monde (bitume par défaut)
+  const CRR = { bitume: 0.0055, gravier: 0.0095, terre: 0.012, pave: 0.01224 };   // (v69 suite) pavés du Nord   // route.revetement : à renseigner pour un nouveau monde (bitume par défaut)
   const PLUIE_CRR = 1.12;                                  // chaussée mouillée : +12 % de résistance au roulement
   const DENSITE_PAR_160M = 0.02;                           // l'air s'allège de 2 % tous les 160 m de montée
   const VENT_SOL = 0.6;                                    // 60 % du vent météo à 1 m du sol
@@ -222,16 +222,40 @@ const Peloton = (function () {
     { id: "puncheur", nom: "Puncheur", masse: 69, cda: 0.32, wpf: 1.25, pmax: 2.8, dura: 0.08, couleur: 0xf1c40f, voie: 1.3, ampleur: 1.02 }
   ];
   // noms des coureurs virtuels : tirés au hasard à chaque sortie (prénom féminin pour les femmes, voir r.femme)
-  const PRENOMS_H = ["Lucas", "Hugo", "Théo", "Louis", "Nathan", "Tom", "Jules", "Arthur", "Paul", "Maxime", "Antoine", "Julien", "Romain", "Bastien", "Kévin", "Mathis", "Enzo", "Rémi", "Mattéo", "Pierre", "Marco", "Lars", "Diego", "Jonas", "Tadej", "Wout", "Primo", "Remco"];
-  const PRENOMS_F = ["Léa", "Chloé", "Manon", "Camille", "Inès", "Jade", "Louise", "Pauline", "Juliette", "Clara", "Marion", "Elisa", "Anna", "Lotte", "Demi", "Marta"];
-  const NOMS = ["Martin", "Bernard", "Dubois", "Laurent", "Moreau", "Girard", "Roux", "Fontaine", "Chevalier", "Garnier", "Lefèvre", "Faure", "Mercier", "Blanc", "Guérin", "Perrin", "Morel", "Boyer", "Colin", "Vidal", "Rossi", "Jansen", "Moreno", "Novak", "Berg", "Costa", "Keller", "Lambert"];
+  const PRENOMS_H = ["Lucas", "Hugo", "Théo", "Louis", "Nathan", "Tom", "Jules", "Arthur", "Paul", "Maxime", "Antoine", "Julien", "Romain", "Bastien", "Kévin", "Mathis", "Enzo", "Rémi", "Mattéo", "Pierre", "Marco", "Lars", "Diego", "Jonas", "Tadej", "Wout", "Primo", "Remco", "Gabriel", "Samuel", "Axel", "Victor", "Noah", "Ethan", "Sacha", "Valentin", "Clément", "Florian", "Damien", "Yann", "Olivier", "Stefan", "Mario", "Tobias", "Mateo", "Ivan", "Felix", "Jorge"];
+  const PRENOMS_F = ["Léa", "Chloé", "Manon", "Camille", "Inès", "Jade", "Louise", "Pauline", "Juliette", "Clara", "Marion", "Elisa", "Anna", "Lotte", "Demi", "Marta", "Eva", "Nina", "Sofia", "Hanna", "Lena", "Ines", "Alba"];
+  const NOMS = ["Martin", "Bernard", "Dubois", "Laurent", "Moreau", "Girard", "Roux", "Fontaine", "Chevalier", "Garnier", "Lefèvre", "Faure", "Mercier", "Blanc", "Guérin", "Perrin", "Morel", "Boyer", "Colin", "Vidal", "Rossi", "Jansen", "Moreno", "Novak", "Berg", "Costa", "Keller", "Lambert", "Petit", "Simon", "Michel", "Leroy", "Andre", "Muller", "Weber", "Fischer", "Silva", "Ferrari", "Bianchi", "Haas", "Vogel", "Peeters", "Janssens", "Dumont", "Renard", "Marchand", "Colas", "Noël", "Brun", "Poulain", "Barre", "Chauvin", "Lemaire", "Olsen", "Berger", "Meyer"];
   const auHasard = (t, pris) => { let x, n = 0; do { x = t[Math.floor(Math.random() * t.length)]; } while (pris.has(x) && ++n < 50); pris.add(x); return x; };
-  const NIVEAUX = { facile: [-0.05, -0.02], equilibre: [-0.025, 0.025], expert: [0.02, 0.05] };
+    // (v86) difficulté = puissance des coureurs virtuels par rapport à ta FTP (en W/kg) : facile 80 %, normal 100 %, hardcore 115 % (± quelques % selon le coureur)
+  const NIVEAUX = { facile: [-0.23, -0.17], equilibre: [-0.03, 0.03], expert: [0.12, 0.18] };
+  // (v86) équipes : 8 équipes de 5 (la tienne = 0, avec 4 coéquipiers) quand la course se fait « en équipe »
+  /* (v87) Équipes inspirées des équipes World Tour d'aujourd'hui (noms détournés, maillots d'après leurs couleurs 2026) ; 7 sont tirées au hasard à chaque Tour.
+     kit : c1 = couleur du corps, c2 / c3 = couleurs secondaires, bas = cuissard, motif = dessin du maillot dans le shader de js/monde3d.js
+     (0 uni, 1 manches, 2 une manche, 3 bas, 4 bande centrale, 5 dégradé, 6 bande à la poitrine, 7 manches et bas, 8 flammes). */
+  const KITS_EQUIPES = [
+    { nom: "Jayco Aurore", c1: 0x6b2fa8, c2: 0x7ce04b, c3: 0x4a1c80, bas: 0x2a1050, motif: 8 },
+    { nom: "Bahreïn Vainqueur", c1: 0x101c3a, c2: 0x6ec6ff, bas: 0x101c3a, motif: 1 },
+    { nom: "Alpin–Premier", c1: 0x1e63e0, c2: 0x7fb2ff, bas: 0x0f2a66, motif: 5 },
+    { nom: "Décathlète CMA", c1: 0x14b8b0, c2: 0xe5383b, bas: 0x0f6d70, motif: 6 },
+    { nom: "EF Éducation–FacilePoste", c1: 0xff5fa8, c2: 0xd63384, bas: 0x2b1030, motif: 4 },
+    { nom: "Groupe Ama–FDJ Unis", c1: 0x4aa8ff, c2: 0xe63946, bas: 0x14307a, motif: 2 },
+    { nom: "Lydl–Trak", c1: 0x2a5bd7, c2: 0xffd60a, bas: 0x1b2a6b, motif: 2 },
+    { nom: "Uno-Y Mobilité", c1: 0xd62828, c2: 0xffd60a, bas: 0x1c1f26, motif: 1 },
+    { nom: "Soudure Rapide-Pas", c1: 0x1d4ed8, c2: 0xc6ff00, bas: 0x1d2a6d, motif: 3 },
+    { nom: "Mouvistar", c1: 0xf4f7fb, c2: 0x2563eb, bas: 0x1d3d9a, motif: 3 },
+    { nom: "Taureau Rouge–Bora", c1: 0xf4f7fb, c2: 0x1f56c4, c3: 0xe5383b, bas: 0x1b2a6b, motif: 7 },
+    { nom: "Émirats Team XRG", c1: 0xf4f7fb, c2: 0x1c1f26, c3: 0xd62828, bas: 0x1c1f26, motif: 7 },
+    { nom: "Bourdon–Lease", c1: 0xffd60a, c2: 0x1c1f26, bas: 0x1c1f26, motif: 1 }
+  ];
+  const NOMS_EQUIPES = ["Ton équipe"].concat(KITS_EQUIPES.map((k) => k.nom));
+  const COUL_EQUIPE0 = 0xff7a2f, MAX_IA = 39;   // 40 coureurs en tout, toi compris
   const G = 9.81, RENDEMENT = 0.975, VMAX = 19;
   const ALLURE_COURSE = 0.80;   // allure de croisière en course : 80 % de leur puissance critique (≈ FTP), modulée par la pente
   const RESERVE_IA = 0.80;      // réserve anaérobie (W′) des coureurs virtuels réduite de 20 %
   const borner = (x, a, b) => Math.max(a, Math.min(b, x));
-  let wpUser = 14841, coureurs = [], mode = "aucun", d0 = 0, L = 0, t = 0, parti = false, ftpUser = 200, poidsUser = 75, pente = () => 0;
+  let tttC = false, equipesT = [];   // (v87) contre-la-montre par équipe
+  const TEAM_INT = 120, GAP_EQ = 2.5, PULL = 30, RATE_SLOT = 1.2;   // départ d'une équipe toutes les 2 min ; écart entre deux coureurs de la file (m) ; relais (s) ; vitesse de changement de place (places/s)
+  let enEquipeC = false, wpUser = 14841, coureurs = [], mode = "aucun", d0 = 0, L = 0, t = 0, parti = false, ftpUser = 200, poidsUser = 75, pente = () => 0;
   let graine = 1, user = { d: 0, v: 0, fin: null, vue: false };
   function alea() { graine |= 0; graine = graine + 0x6D2B79F5 | 0; let x = Math.imul(graine ^ graine >>> 15, 1 | graine); x = x + Math.imul(x ^ x >>> 7, 61 | x) ^ x; return ((x ^ x >>> 14) >>> 0) / 4294967296; }
 
@@ -254,13 +278,19 @@ const Peloton = (function () {
   }
   // (v69 suite) coureurs tirés au hasard : profil, nom, femme ou homme, allure, maillot, x = place dans la fourchette du niveau (0 à 1) ;
   // gardés d'une étape à l'autre d'un Tour (o.equipe)
-  function tirerEquipe(n) {
-    n = Math.max(1, Math.min(12, n | 0 || 4));
-    const pris = new Set(), couleurs = PALETTE.slice().sort(() => Math.random() - 0.5), l = [];
+  function tirerEquipe(n, enEquipe, couleurUser) {
+    n = Math.max(1, Math.min(MAX_IA, n | 0 || 4));
+    const pris = new Set(), couleurs = PALETTE.slice().sort(() => Math.random() - 0.5), l = []; let kitsT = null;
     for (let i = 0; i < n; i++) {
       const tp = i < TYPES.length ? TYPES[i] : TYPES[Math.floor(Math.random() * TYPES.length)], femme = Math.random() < 0.3;
       l.push({ id: tp.id, nom: auHasard(femme ? PRENOMS_F : PRENOMS_H, pris) + " " + auHasard(NOMS, pris), femme, look: Math.floor(Math.random() * 1e9),
                couleur: couleurs[i % couleurs.length], x: Math.random(), vb: i < TYPES.length ? 0 : (Math.random() - 0.5) * 0.5 });
+      if (enEquipe) {
+        const eq = i < 4 ? 0 : 1 + Math.floor((i - 4) / 5);
+        if (!kitsT) kitsT = KITS_EQUIPES.slice().sort(() => Math.random() - 0.5);
+        const kit = eq === 0 ? { c1: couleurUser || COUL_EQUIPE0, motif: 0 } : kitsT[(eq - 1) % kitsT.length];   // tes coéquipiers portent ton maillot
+        l[i].eq = eq; l[i].kit = kit; l[i].couleur = kit.c1; l[i].nomEq = eq === 0 ? NOMS_EQUIPES[0] : kit.nom;
+      }
     }
     return l;
   }
@@ -273,27 +303,124 @@ const Peloton = (function () {
     if (mode === "aucun") return;
     const wkg = ftpUser / poidsUser, wpKg = wpUser / poidsUser, [lo, hi] = NIVEAUX[o.niveau] || NIVEAUX.equilibre;
     // o.nombre coureurs (4 à 12) : un de chaque profil, puis des profils tirés au hasard ; femme ou homme, maillot et allure au hasard
-    const specs = Array.isArray(o.equipe) && o.equipe.length ? o.equipe : tirerEquipe(o.nombre);
-    // contre-la-montre : départs toutes les 30 s, la moitié des coureurs partis avant toi (devant sur la route), les autres après (derrière)
-    const nAvant = Math.ceil(specs.length / 2);
+    const specs = Array.isArray(o.equipe) && o.equipe.length ? o.equipe : tirerEquipe(o.nombre, o.enEquipe);
+    enEquipeC = specs.some((sp) => sp.eq !== undefined);
+    // contre-la-montre (v86) : départs toutes les 30 s, TOUS les coureurs virtuels partent avant toi (tu pars en dernier, sur la rampe)
+    const nAvant = specs.length;
+    // (v87) contre-la-montre PAR ÉQUIPE : chaque équipe part d'un bloc toutes les 2 min (la tienne en dernier, avec toi), roule en file alignée et prend des relais
+    const ttt = mode === "clm" && !!o.parEquipe && specs.some((sp) => sp.eq !== undefined);
+    tttC = ttt; equipesT = [];
+    const ordreEq = [];
+    if (ttt) { for (const sp of specs) if (!ordreEq.includes(sp.eq)) ordreEq.push(sp.eq); const i0 = ordreEq.indexOf(0); if (i0 >= 0) ordreEq.splice(i0, 1); ordreEq.push(0); }
+    const tdEq = (eq) => eq === 0 ? 0 : -TEAM_INT * (ordreEq.length - 1 - ordreEq.indexOf(eq));
+
     specs.forEach((sp, i) => {
       const tp = TYPES.find((x) => x.id === sp.id) || TYPES[0], femme = !!sp.femme, nom = sp.nom, G = grille(i);
       const delta = lo + (hi - lo) * (sp.x === undefined ? alea() : sp.x);   // écart de watts/kg par rapport à l'utilisateur
       const cp = wkg * (1 + delta) * tp.masse;
-      const tDep = mode === "clm" ? (i < nAvant ? -30 * (nAvant - i) : 30 * (i - nAvant + 1)) : 0;
-      coureurs.push({ type: tp, id: tp.id, nom, femme, look: sp.look, couleur: sp.couleur, voie: mode === "clm" ? tp.voie : G[1], ampleur: tp.ampleur, masse: tp.masse, delta, wkg: wkg * (1 + delta),
+      const tDep = ttt ? tdEq(sp.eq) : mode === "clm" ? -30 * (nAvant - i) : 0;
+      coureurs.push({ type: tp, id: tp.id, nom, femme, look: sp.look, eq: sp.eq, equipier: sp.eq === 0, kit: sp.kit, nomEq: sp.nomEq, eqT: ttt, slot: 0, slotCible: 0, lat: 0, couleur: sp.couleur, voie: mode === "clm" ? tp.voie : G[1], ampleur: tp.ampleur, masse: tp.masse, delta, wkg: wkg * (1 + delta),
         tDep, rangDep: i, pass: [0], partiClm: false,
         cp, wp: RESERVE_IA * tp.wpf * wpKg * tp.masse, wbal: RESERVE_IA * tp.wpf * wpKg * tp.masse, voieBase: borner(tp.voie + (sp.vb || 0), 0.1, 1.8), travail: 0, d: mode === "clm" ? d0 - 4 - 1.6 * i : d0 + G[0], v: 0, P: 0, cible: 0, cad: 0,
-        atk: null, cool: 30 + 40 * alea(), ech: false, echDeclenche: 0.12 + 0.3 * alea(), etat: "Au départ", tour: 0, fini: null, ndraft: 0, passe: null, vlat: 0,
+        vide: false, atk: null, cool: 30 + 40 * alea(), ech: false, echDeclenche: 0.12 + 0.3 * alea(), etat: "Au départ", tour: 0, fini: null, ndraft: 0, passe: null, vlat: 0,
         clm: false, grp: 0, velo: "simple", masseVelo: 8, aeroVelo: 0, roue: null, colle: null, prend: null, prendT: 0, prendCd: 0, tete: 0, relais: false, sucer: 0, echFaite: false });
     });
+    if (ttt) {
+      for (const eq of ordreEq) {
+        const M = coureurs.filter((r) => r.eq === eq);
+        if (!M.length) continue;
+        const E = { eq, membres: M, tDep: M[0].tDep, nom: M[0].nomEq || ("Équipe " + eq), couleur: M[0].couleur, parti: false, d: 0, v: 0, relaisT: 0, rot: false, voie: 0.9 };
+        M.forEach((r, k) => { r.slot = r.slotCible = k; r.lat = 0; });
+        placerEquipe(E); equipesT.push(E);
+      }
+    }
     // contre-la-montre : ceux qui sont partis avant toi ont déjà roulé (30 s, 60 s… d'avance) quand tu t'élances
+
     if (mode === "clm") {
       t = Math.min(0, ...coureurs.map((r) => r.tDep));
       while (t < -1e-6) { const h = Math.min(0.25, -t); t += h; pas(h); }
       t = 0;
     }
   }
+  /* ---------- (v87) Contre-la-montre par équipe : file alignée, relais, aspiration ----------
+     Chaque équipe avance comme un bloc (une vitesse pour toute la file). La vitesse vient de la puissance visée par chaque coureur (comme en individuel)
+     contre la somme des résistances de l'air, qui dépend de la place dans la file (le premier n'est pas abrité, les suivants le sont, bien alignés à ~0,5 m de roue).
+     Le premier prend un relais de 30 s (ou moins s'il s'épuise), puis se décale sur le côté et se rabat en queue de file pendant que les autres avancent d'une place. */
+  function placerEquipe(E) {
+    const n = E.membres.length;
+    // (v89) même place de départ pour toutes les équipes : le dernier d'une file de 5 est sur la ligne (pour la tienne, c'est toi ; avant, ta file partait devant la ligne et gagnait ~1 s)
+    E.d = d0 + (n + (E.eq === 0 ? 1 : 0) - 1) * GAP_EQ;
+    for (const r of E.membres) { r.d = E.d - r.slot * GAP_EQ; r.v = 0; r.P = 0; r.cad = 0; r.voie = E.voie; r.lat = 0; }
+  }
+  function pasEquipe(E, dt) {
+    const M = E.membres, n = M.length;
+    if (t < E.tDep) { placerEquipe(E); for (const r of M) r.etat = "Départ dans " + Math.ceil(E.tDep - t) + " s"; return; }
+    if (!E.parti) { E.parti = true; placerEquipe(E); for (const r of M) { r.partiClm = true; r.pass = [0]; } }
+    const tousFinis = M.every((r) => r.fini !== null);
+    // relais : le premier se rabat quand son tour est fini ou qu'il est fatigué (sauf près de l'arrivée)
+    if (!tousFinis) {
+      E.relaisT += dt;
+      const chef = M.reduce((a, r) => (r.slotCible < a.slotCible ? r : a), M[0]);
+      if (!E.rot && n >= 3 && d0 + longueurCourse() - E.d > 500 && (E.relaisT > PULL || chef.wbal < chef.wp * 0.3)) {
+        E.rot = true; E.relaisT = 0;
+        for (const r of M) r.slotCible = r === chef ? n - 1 : r.slotCible - 1;
+      }
+    }
+    let bouge = false;
+    for (const r of M) {
+      const dl = r.slotCible - r.slot;
+      if (Math.abs(dl) > 0.001) { r.slot += borner(dl, -RATE_SLOT * dt, RATE_SLOT * dt); bouge = true; }
+      const recule = E.rot && r.slotCible === n - 1 && r.slot < n - 1 - 0.2;       // celui qui se rabat longe la file par l'extérieur
+      r.lat += ((recule ? 0.9 : 0) - r.lat) * Math.min(1, dt * 3);
+      r.voie = borner(E.voie + r.lat, 0.05, 1.85);
+    }
+    if (E.rot && !bouge) E.rot = false;
+    const ordre = M.slice().sort((a, b) => a.slot - b.slot), v = E.v;
+    let sumP = 0, sumM = 0, sumR = 0;
+    const det = [];
+    for (const r of ordre) {
+      r.d = E.d - r.slot * GAP_EQ; r.v = v; r.grp = 0;
+      let ab = 1;
+      for (const o of ordre) if (o.slot < r.slot - 0.01) ab = Math.min(ab, Aero.facteurAspiration((r.slot - o.slot) * GAP_EQ, r.lat - o.lat));
+      const m = r.masse + r.masseVelo, ang = Math.atan(pente(r.d) / 100), va = v + ctx.vent(r.d);
+      const res = (m * G * (Math.sin(ang) + crrA(r.d) * Math.cos(ang)) + 0.5 * ctx.rho * cdaIA(r) * ab * va * Math.abs(va)) * RESISTANCE_PLUS;
+      const cib = r.fini !== null ? cpEff(r) * 0.35 : Math.min(cibleClm(r), plafond(r));
+      det.push({ r, m, res, ab }); sumP += cib; sumM += m; sumR += res;
+    }
+    let a;
+    if (tousFinis) a = -0.3 * v;
+    else { const frein = v > VMAX ? (v - VMAX) * 40 * n : 0; a = ((sumP * RENDEMENT) / Math.max(v, 1) - sumR - frein) / sumM; }
+    E.v = Math.max(0, v + a * dt);
+    if (ctx.vsure) { const vc = ctx.vsure(E.d, E.v); if (E.v > vc) E.v = Math.max(vc, E.v - 6 * dt); }
+    E.d += E.v * dt;
+    for (const { r, m, res, ab } of det) {
+      const besoin = tousFinis ? 0 : Math.max(0, (res * E.v + m * a * E.v) / RENDEMENT);
+      r.P += (Math.min(besoin, plafond(r)) - r.P) * (1 - Math.exp(-dt / 0.8));
+      const cp = cpEff(r);
+      majReserve(r, cp, dt); r.travail += r.P * dt;
+      r.v = E.v; r.d = E.d - r.slot * GAP_EQ; r.ab = ab; r.cad = r.v > 0.5 ? borner(72 + 22 * (r.P / cp - 0.6), 60, 112) : 0;
+      r.etat = r.fini !== null ? "Arrivé" : r.slot < 0.5 ? "En relais" : r.lat > 0.3 ? "Se rabat" : "Dans la roue";
+      while (r.d - d0 >= r.pass.length * PASSAGE && r.pass.length < 20000) r.pass.push(t - E.tDep);
+      if (r.fini === null && r.d >= d0 + longueurCourse()) r.fini = t - E.tDep;
+    }
+  }
+  // temps d'une équipe = celui du 4e coureur à l'arrivée (4 sur 5) ; au point de chrono k : le 4e à y passer
+  function tempsEquipeFinal(E) {
+    const l = E.membres.map((r) => (r.fini === null ? Infinity : r.fini));
+    if (E.eq === 0) l.push(user.fin === null ? Infinity : user.fin);
+    l.sort((a, b) => a - b);
+    return l[Math.min(3, l.length - 1)];
+  }
+  function passEq(E, k) {
+    const l = E.membres.filter((r) => r.pass.length > k).map((r) => r.pass[k]);
+    if (E.eq === 0 && user.pass.length > k) l.push(user.pass[k]);
+    const need = Math.min(4, E.membres.length + (E.eq === 0 ? 1 : 0));
+    if (l.length < need) return null;
+    return l.sort((a, b) => a - b)[need - 1];
+  }
+  const tempsEquipes = () => { const o = {}; for (const E of equipesT) o[E.eq] = tempsEquipeFinal(E); return o; };
+  const equipiers = () => tttC || enEquipeC ? coureurs.filter((r) => r.eq === 0).map((r) => ({ nom: r.nom, ecart: r.d - user.d })).sort((a, b) => b.ecart - a.ecart) : [];
+
   // (v69 suite) contre-la-montre : allure tenue jusqu'à l'arrivée (≈ 107 % du FTP pour 20 min, 100 % pour une heure), plus fort en montée, réserve vidée à la fin
   function cibleClm(r) {
     const rest = d0 + longueurCourse() - r.d, g = pente(r.d), cp = cpEff(r);
@@ -306,9 +433,25 @@ const Peloton = (function () {
   }
 
   const cpEff = (r) => r.cp * (1 - r.type.dura * Math.min(1, r.travail / 1000 / r.masse / 25));
+  // (v93) réserve anaérobie (W′) plus réaliste :
+  //  - on la vide au-dessus de la puissance critique, on la reconstitue au-dessous avec la vitesse de Skiba (plus on roule doucement, plus c'est rapide :
+  //    constante de temps 316 s à l'arrêt, plus de 800 s juste sous la puissance critique) ;
+  //  - la fatigue accumulée réduit aussi le réservoir (jusqu'à −35 % après 30 kJ/kg) : on ne retrouve plus une réserve pleine en fin de course ;
+  //  - un coureur qui vide son réservoir « craque » : il reste limité à 90 % de sa puissance critique tant qu'il n'a pas retrouvé 20 % de réserve.
+  const fatigueW = (r) => Math.min(1, r.travail / 1000 / r.masse / 30);
+  const wpMax = (r) => r.wp * (1 - 0.35 * fatigueW(r));
+  function majReserve(r, cp, dt) {
+    if (r.P > cp) r.wbal -= (r.P - cp) * dt;
+    else {
+      const tau = 546 * Math.exp(-0.01 * (cp - r.P)) + 316;
+      r.wbal += (wpMax(r) - r.wbal) * (1 - Math.exp(-dt / tau));
+    }
+    r.wbal = borner(r.wbal, 0, wpMax(r));
+    if (r.wbal <= 0) r.vide = true; else if (r.vide && r.wbal > 0.2 * r.wp) r.vide = false;
+  }
   function plafond(r) {                       // puissance maximale disponible compte tenu de la réserve restante
     const cp = cpEff(r), f = Math.max(0, r.wbal) / r.wp;
-    return r.wbal <= 0 ? cp * 0.95 : cp + (r.type.pmax * cp - cp) * Math.sqrt(f);
+    return r.vide ? cp * 0.9 : cp + (r.type.pmax * cp - cp) * Math.sqrt(f);
   }
   // aspiration : réduction de traînée derrière un autre coureur (ou l'utilisateur), selon la distance et l'alignement
   function abri(r, tous) {
@@ -321,7 +464,7 @@ const Peloton = (function () {
   }
   function abriPour(d, voie) {                 // pour l'utilisateur : abri derrière les coureurs virtuels
     let meilleur = 1;
-    for (const o of coureurs) meilleur = Math.min(meilleur, Aero.facteurAspiration(o.d - d, o.voie - voie));
+    for (const o of coureurs) { if (tttC && o.eq !== 0) continue; meilleur = Math.min(meilleur, Aero.facteurAspiration(o.d - d, o.voie - voie)); }   // (v87) CLM par équipe : seulement l'abri de tes coéquipiers
     return meilleur;
   }
   function procheDe(d, dist) {                 // un coureur virtuel à moins de dist mètres (devant ou derrière) ?
@@ -344,7 +487,7 @@ const Peloton = (function () {
     if (user.vue) {
       const ecart = r.d - user.d;
       if (ecart > 100) { p *= borner(1 - (ecart - 100) / 60, 0, 1); r.etat = "Ralentit pour t'attendre"; }
-      else if (ecart < -100) { p = Math.min(cp * 0.65, p * (1 + borner((-ecart - 100) / 80, 0, 1) * 0.3)); r.etat = "Revient dans ta roue"; }
+      else if (ecart < -100) { p = Math.min(cp * 0.85, p * (1 + borner((-ecart - 100) / 80, 0, 1) * 0.7)); r.etat = "Revient dans ta roue"; }
     }
     return p;
   }
@@ -476,6 +619,7 @@ const Peloton = (function () {
   function eviter(dt) {
     const tous = coureurs.concat(user.vue ? [user] : []);
     for (const r of coureurs) {
+      if (r.eqT) continue;                                // (v87) file d'équipe alignée : pas de dépassement
       // 1) fin d'un dépassement en cours : on garde le même côté jusqu'à avoir dégagé, sans changer d'avis
       if (r.passe) {
         const o = r.passe.o, e = o.d - r.d;
@@ -528,13 +672,20 @@ const Peloton = (function () {
   function pas(dt) {
     const tous = coureurs.concat(user.vue ? [user] : []);
     for (const r of coureurs) veloIA(r);
+    if (tttC) for (const E of equipesT) pasEquipe(E, dt);
     for (const r of coureurs) {
+      if (r.eqT) continue;                                // (v87) coureurs d'une équipe : pasEquipe s'en occupe
       if (mode === "clm" && t < r.tDep) {                 // contre-la-montre : attend son départ derrière la ligne
         r.v = 0; r.P = 0; r.cad = 0; r.d = d0 - 4 - 1.6 * r.rangDep; r.etat = "Départ dans " + Math.ceil(r.tDep - t) + " s"; continue;
       }
       if (mode === "clm" && !r.partiClm) { r.partiClm = true; r.d = d0; r.pass = [0]; }
       if (r.fini !== null) { r.cible = cpEff(r) * 0.35; r.etat = "Arrivé"; }
       else r.cible = mode === "course" ? cibleCourse(r, dt) : mode === "clm" ? cibleClm(r) : cibleZ2(r);
+      // (v86) tes coéquipiers (course en équipe) restent près de toi : devant toi, ils lèvent le pied jusqu'aux 3 derniers km
+      if (r.equipier && mode === "course" && r.fini === null && user.vue) {
+        const ec = r.d - user.d, restant = d0 + longueurCourse() - r.d;
+        if (ec > 12 && ec < 500 && restant > 3000) { r.cible = Math.min(r.cible, cpEff(r) * 0.78); r.etat = "Attend son leader"; }
+      }
       // triathlon (vélos de chrono) : l'aspiration est interdite ; trop près de celui qui précède (moins de 12 m), on lève le pied,
       // sauf en attaque (on le double franchement) — les coureurs s'étirent en file espacée et gardent leur position allongée
       if (r.clm && r.fini === null && !r.atk && mode !== "clm") {
@@ -549,10 +700,9 @@ const Peloton = (function () {
       r.P += (r.cible - r.P) * (1 - Math.exp(-dt / (r.cible > r.P ? 0.9 : 1.6)));
       // réserve anaérobie (W') et fatigue
       const cp = cpEff(r);
-      if (r.P > cp) r.wbal -= (r.P - cp) * dt;
-      else r.wbal += (r.wp - r.wbal) * (1 - Math.exp(-dt / 330)) * borner((cp - r.P) / (cp * 0.5), 0.15, 1);
-      r.wbal = borner(r.wbal, 0, r.wp);
+      majReserve(r, cp, dt);
       r.travail += r.P * dt;
+      if (r.vide && r.fini === null) r.etat = "À bout de forces";
       // mouvement
       let ab = mode === "clm" ? 1 : abri(r, tous);          // contre-la-montre : chacun seul, pas d'aspiration
       if (r.clm) {                       // vélo de chrono : position allongée, sauf en groupe (relevé sur les cornes, aspiration réduite)
@@ -610,20 +760,46 @@ const Peloton = (function () {
     return ecoule + rest / Math.max(fait > 200 && ecoule > 10 ? fait / ecoule : r.v, 4);
   }
   function classement() {         // liste triée (arrivée, puis distance) avec l'utilisateur
-    if (mode === "clm") {
-      const l = coureurs.map((r) => ({ nom: r.nom, couleur: r.couleur, d: r.d, fini: r.fini, etat: r.etat, P: r.P, wbal: r.wbal / r.wp, user: false, v: r.v, ecart: ecartClm(r) }));
-      l.push({ nom: "Toi", couleur: 0xff7a2f, d: user.d, fini: user.fin, etat: "", user: true, v: user.v, wbal: null, ecart: 0 });
+    if (tttC) {                   // (v87) CLM par équipe : une ligne par équipe, écart au dernier point de chrono (ou à l'arrivée)
+      const E0 = equipesT.find((E) => E.eq === 0), k = Math.max(0, user.pass.length - 1), t0 = E0 ? passEq(E0, k) : null, f0 = E0 ? tempsEquipeFinal(E0) : Infinity;
+      const l = equipesT.map((E) => {
+        const moi = E.eq === 0, fin = tempsEquipeFinal(E), pk = k >= 1 && t0 !== null ? passEq(E, k) : null;
+        const ecart = moi ? 0 : isFinite(fin) && isFinite(f0) ? fin - f0 : pk !== null ? pk - t0 : null;
+        return { nom: E.nom, couleur: E.couleur, d: moi ? user.d : E.d, fini: moi ? user.fin : (isFinite(fin) ? fin : null), etat: moi ? "" : E.membres[0].etat, P: 0, wbal: 0, user: moi, v: moi ? user.v : E.v, ecart, eq: E.eq };
+      });
       l.sort((a, b) => (a.ecart === null) - (b.ecart === null) || (a.ecart || 0) - (b.ecart || 0));
       return l;
     }
-    const liste = coureurs.map((r) => ({ nom: r.nom, couleur: r.couleur, d: r.d, fini: r.fini, etat: r.etat, P: r.P, wbal: r.wbal / r.wp, user: false, v: r.v }));
-    liste.push({ nom: "Toi", couleur: 0xff7a2f, d: user.d, fini: user.fin, etat: "", user: true, v: user.v, wbal: null });
+    if (mode === "clm") {
+
+      const l = coureurs.map((r) => ({ nom: r.nom, couleur: r.couleur, d: r.d, fini: r.fini, etat: r.etat, P: r.P, wbal: r.wbal / r.wp, user: false, v: r.v, ecart: ecartClm(r), eq: r.eq }));
+      l.push({ nom: "Toi", couleur: 0xff7a2f, d: user.d, fini: user.fin, etat: "", user: true, v: user.v, wbal: null, ecart: 0, eq: equipeUser() });
+      l.sort((a, b) => (a.ecart === null) - (b.ecart === null) || (a.ecart || 0) - (b.ecart || 0));
+      return l;
+    }
+    const liste = coureurs.map((r) => ({ nom: r.nom, couleur: r.couleur, d: r.d, fini: r.fini, etat: r.etat, P: r.P, wbal: r.wbal / r.wp, user: false, v: r.v, eq: r.eq }));
+    liste.push({ nom: "Toi", couleur: 0xff7a2f, d: user.d, fini: user.fin, etat: "", user: true, v: user.v, wbal: null, eq: equipeUser() });
     liste.sort((a, b) => (a.fini !== null && b.fini !== null) ? a.fini - b.fini : a.fini !== null ? -1 : b.fini !== null ? 1 : b.d - a.d);
     return liste;
   }
+  const equipeUser = () => enEquipeC ? 0 : undefined;
+  // (v86) contre-la-montre : à ton arrivée, on fait rouler la suite en accéléré jusqu'à l'arrivée du dernier coureur virtuel : classement final exact
+  // (v89) rend vrai quand tout le monde est arrivé ; `max` pas par appel pour ne pas figer l'écran (l'écran l'appelle à chaque image jusqu'au bout)
+  function finaliser(max) {
+    if (mode !== "clm") return true;
+    for (let n = 0; n < (max || 24000) && coureurs.some((r) => r.fini === null); n++) { t += 0.25; pas(0.25); }
+    return coureurs.every((r) => r.fini !== null);
+  }
+  // classement final du contre-la-montre : temps de chacun (chrono personnel), du plus rapide au plus lent
+  function classementFinal() {
+    if (tttC) return equipesT.map((E) => ({ nom: E.nom, couleur: E.couleur, temps: tempsEquipeFinal(E), user: E.eq === 0, eq: E.eq })).sort((a, b) => a.temps - b.temps);
+    const l = coureurs.map((r) => ({ nom: r.nom, couleur: r.couleur, temps: tempsEstime(r), user: false, eq: r.eq }));
+    l.push({ nom: "Toi", couleur: 0xff7a2f, temps: user.fin === null ? Infinity : user.fin, user: true, eq: equipeUser() });
+    return l.sort((a, b) => a.temps - b.temps);
+  }
   const actif = () => mode !== "aucun" && coureurs.length > 0;
   const majVelos = () => { for (const r of coureurs) veloIA(r); };
-  return { TYPES, tirerEquipe, tempsEstime, regler, abriPour, procheDe, majVelos, demarrer, maj, classement, actif, coureurs: () => coureurs, mode: () => mode, tours: () => toursC, longueurCourse, depart: () => d0, longueur: () => L, temps: () => t, parti: () => parti };
+  return { TYPES, NOMS_EQUIPES, KITS_EQUIPES, MAX_IA, tempsEquipes, equipiers, ttt: () => tttC, finaliser, classementFinal, tirerEquipe, tempsEstime, regler, abriPour, procheDe, majVelos, demarrer, maj, classement, actif, coureurs: () => coureurs, mode: () => mode, tours: () => toursC, longueurCourse, depart: () => d0, longueur: () => L, temps: () => t, parti: () => parti };
 })();
 
 const balade = { enCours: false, auto: false, immobile: 0, distance: 0, vitesse: 0, temps: 0, altitude: 0, dernier: maintenant(), tick: maintenant(), cadence: null };
@@ -742,10 +918,10 @@ function avancer(dt, puissance, pente) {
   const g = 9.81, rendement = 0.975;
   const angle = Math.atan(pente / 100);
   const v = Math.max(balade.vitesse, 1);
-  condAir.abri = Peloton.actif() && Peloton.mode() !== "clm" ? Peloton.abriPour(balade.distance, 0.9) : 1;   // contre-la-montre : pas d'aspiration
+  condAir.abri = Peloton.actif() && (Peloton.mode() !== "clm" || Peloton.ttt()) ? Peloton.abriPour(balade.distance, 0.9) : 1;   // contre-la-montre : pas d'aspiration (sauf par équipe : abri de tes coéquipiers)
   if (typeof Groupe !== "undefined" && Groupe.actif() && $("peloton-mode").value !== "clm" && !(Peloton.actif() && Peloton.mode() === "clm")) condAir.abri = Math.min(condAir.abri, Groupe.abriPour(balade.distance));   // (v71) derrière un ami
   // vélo de chrono en groupe : malus progressif (environ 1,5 s pour se relever ou se remettre en position)
-  const enGroupe = Aero.reg.clm && Peloton.actif() && Peloton.procheDe(balade.distance, GROUPE_DIST) ? 1 : 0;
+  const enGroupe = Aero.reg.clm && Peloton.actif() && !Peloton.ttt() && Peloton.procheDe(balade.distance, GROUPE_DIST) ? 1 : 0;   // (v87) CLM par équipe : on reste en position allongée dans la file
   Aero.reg.groupe += (enGroupe - Aero.reg.groupe) * Math.min(1, dt * 0.7);
   if (Aero.reg.clm) condAir.abri = 1 - (1 - condAir.abri) * (1 - MALUS_CLM_ABRI * Aero.reg.groupe);
   const air = balade.vitesse + condAir.ventFace;       // vitesse de l'air par rapport au cycliste
@@ -791,19 +967,8 @@ function majTexteDescente() {
 }
 
 /* (v72) la résistance du home trainer varie toujours sur les pavés et le gravier ; la case « Vibrations » ne règle plus que les secousses de la caméra */
-/* (v69 suite) vibrations sur les pavés et les chemins blancs : le KICKR ne vibre pas, mais la pente envoyée change par petits à-coups irréguliers
-   (±1,2 % sur les pavés, ±0,5 % sur le gravier, une fois toutes les 0,5 s) : la résistance « tape » un peu comme sur la route */
-function vibrationRoute() {
-  if (!balade.enCours || balade.vitesse < 2 || modeActuel() !== "route") return 0;
-  const r = revetementA(balade.distance);
-  return r === "pave" ? 1 : r === "gravier" || r === "terre" ? 0.4 : 0;
-}
-function envoyerPente() {
-  const vib = vibrationRoute();
-  if (!vib) { envoyerPenteValeur(penteEnvoyee()); return; }
-  const k = Math.floor(balade.temps / 0.5), h = Math.sin(k * 12.9898) * 43758.5453, x = h - Math.floor(h);
-  envoyerPenteValeur(borner(penteEnvoyee() + (x - 0.5) * 2 * 1.2 * vib, -10, 20));
-}
+/* (v82) plus de vibrations de la résistance sur les pavés et le gravier : la pente envoyée est toujours la vraie */
+function envoyerPente() { envoyerPenteValeur(penteEnvoyee()); }
 /* Commande « simulation » du home trainer (FTMS 0x11) : vent, pente, résistance au roulement et à l'air, avec les mêmes
    valeurs que la vitesse dans le jeu (+20 % compris). L'air est envoyé comme le KICKR l'attend : ρ × CdA en kg/m
    (CdA 0,34 → 0,42, × 1,2 ≈ 0,50 ; Zwift envoie 0,51). Avant la v56, on envoyait 0,24 : le home trainer comptait deux fois
@@ -815,7 +980,9 @@ function envoyerPenteValeur(envoyee) {
   const vent = Math.round(borner(Aero.reg.vent ? condAir.ventFace || 0 : 0, -15, 15) * 1000);                 // m/s × 1000, positif = vent de face
   const s = dernierSim, penteIdem = derniereEnvoyee !== null && Math.abs(envoyee - derniereEnvoyee) < 0.1;
   if (penteIdem && s && Math.abs(crr - s.crr) < 2 && Math.abs(cw - s.cw) < 2 && Math.abs(vent - s.vent) < 400) return;
-  if (penteIdem && s && Date.now() - s.t < 2000) return;          // vent et aspiration changent sans cesse : une mise à jour toutes les 2 s au plus
+  if (penteIdem && s && Date.now() - s.t < 2000) return;
+  if (s && Date.now() - s.t < 1000) return;                       // (v77) jamais plus d'une commande par seconde : sur un parcours qui change de pente sans cesse, elles s'empilaient et le home trainer lâchait la résistance un instant
+  if (ecrituresEnAttente > 0) return;                              // (v77) une commande est encore en route : on attend, la valeur à jour sera envoyée au passage suivant          // vent et aspiration changent sans cesse : une mise à jour toutes les 2 s au plus
   derniereEnvoyee = envoyee;
   dernierSim = { crr, cw, vent, t: Date.now() };
   dernierWatts = null;

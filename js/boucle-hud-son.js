@@ -73,12 +73,14 @@ function rafraichir() {
     }
   }
 
+  majRampe();
   // (v69 suite) pas de départ automatique pendant le choix du monde : on peut s'échauffer en choisissant,
   // sinon la sortie démarrait sur l'ancien parcours et empêchait de changer de monde
   const surChoix = !$("onglet-world").hidden && !$("world-choix").hidden;
-  if (!balade.enCours && !balade.auto && balade.temps === 0 && !surChoix && $("auto-depart").checked) {
+  if (!balade.enCours && !balade.auto && (balade.temps === 0 || (rampe && rampe.etat === "attente")) && !surChoix && $("auto-depart").checked) {
     const pedaleDepart = (puissance !== null && puissance >= 5) || (cadence !== null && cadence >= 10);
-    if (pedaleDepart) {
+    if (pedaleDepart && demanderDepartRampe()) { /* contre-la-montre : compte à rebours sur la rampe */ }
+    else if (pedaleDepart) {
       balade.enCours = true; balade.immobile = 0; balade.dernier = t;
       if (!session.debut) session.debut = Date.now();
       majBoutonBalade(); log("Départ automatique : tu as commencé à pédaler.");
@@ -97,7 +99,7 @@ function rafraichir() {
     }
     let nouveaux = 0;
     while (Math.floor(balade.temps) > session.samples.length && nouveaux < 120) {
-      session.samples.push({ w: session.samples.length + 1 + Math.round(session.pause), p: puissance, c: cadence, hr: fc, v: balade.vitesse, d: balade.distance - (balade.d0 || 0),
+      session.samples.push({ w: session.samples.length + 1 + Math.round(session.pause), p: puissance, c: cadence, hr: fc, v: balade.vitesse, d: balade.distance - (balade.d0 || 0), dc: balade.distance - (balade.d0 || 0) + (balade.deplace || 0),
                              alt: balade.altitude, g: penteMonde(),
                              pl: Peloton.actif() ? Peloton.coureurs().map((r) => Math.round((r.d - (balade.d0 || 0)) * 10) / 10) : undefined });   // (v69 suite) place des autres coureurs (pour revoir la sortie)
       nouveaux++;
@@ -174,6 +176,7 @@ function majHud(puissance, fc) {
   $("hz-fc").textContent = fc !== null ? fc : "–";
   const cad = balade.cadence;
   majAeroHud();
+  if (typeof HudPerso !== "undefined") HudPerso.maj(fc);   // (v78) encarts configurables
   if (monde3d && monde3d.meteo) { let tx = "";
     if (route.villes) { const dv = route.boucle ? balade.distance % route.longueur : balade.distance, vq = route.villes.find((q) => dv >= q[0] && dv <= q[1]); if (vq) tx = "📍 " + vq[2]; }
     if (!tx && route.secteurs) { const dv = route.boucle ? balade.distance % route.longueur : balade.distance, sq = route.secteurs.find((q) => dv >= q[0] && dv <= q[1]); if (sq) tx = (sq[3] === "pave" ? "▦ Pavés · " : "⚪ Chemin blanc · ") + sq[2] + " · " + fr1((sq[1] - sq[0]) / 1000) + " km"; }   // secteurs de gravier (Toscane) ou pavés (v69 suite)
@@ -183,6 +186,7 @@ function majHud(puissance, fc) {
   const fr = (condAir.frein || 0) > 0.05; if ($("hz-frein").hidden === fr) $("hz-frein").hidden = !fr;   // (v69 suite) freinage avant un virage
   const z = ZONES_P.find((x) => (puissance || 0) / ftp() <= x.max) || ZONES_P[ZONES_P.length - 1];
   $("hz-puiss").style.borderTopColor = puissance !== null ? z.couleur : "#7C93AD";
+  $("hz-puiss").style.setProperty("--zc", puissance !== null ? z.couleur : "#7C93AD");   // (v81) liseré du haut du bloc puissance
   $("hz-wkg").textContent = puissance !== null ? fr1(puissance / (parseFloat($("poids").value) || 75)) : "–";
   const zt = $("hz-zone");
   zt.textContent = puissance !== null ? z.nom : ""; zt.style.background = z.couleur;
@@ -293,36 +297,54 @@ function dessinerCarteHud() {
   x.beginPath(); x.arc(X(cur[0]), Y(cur[1]), 9, 0, 6.2832); x.fill(); x.stroke();
 }
 
+/* (v78) profil du bas : toute la boucle (ou tout le parcours) d'un coup, avec les autres participants (coureurs virtuels, amis du groupe, fantôme) */
+let profilCache = null;
 function dessinerProfilHud() {
   const c = $("hz-profil-c"), cw = c.clientWidth, ch = c.clientHeight;
   if (!cw || !ch) return;
   if (c.width !== cw * 2 || c.height !== ch * 2) { c.width = cw * 2; c.height = ch * 2; }
   const W = c.width, H = c.height, x = c.getContext("2d");
   x.clearRect(0, 0, W, H);
-  const d0 = balade.distance, deb = d0 - 400, fin = d0 + 2600, pas = 20;
-  const alts = [];
-  let mn = Infinity, mx = -Infinity;
-  for (let d = deb; d <= fin; d += pas) { const a = monde3d ? monde3d.alt(d) : altitudeA(d); alts.push(a); mn = Math.min(mn, a); mx = Math.max(mx, a); }
-  const etendue = Math.max(40, mx - mn), bas = mn - etendue * 0.15;
-  const haut = H - 8, bw = W / alts.length;
-  for (let i = 0; i < alts.length; i++) {
-    const d = deb + i * pas;
-    const h = ((alts[i] - bas) / (etendue * 1.3)) * haut;
-    x.fillStyle = d < d0 ? "rgba(140,150,165,.75)" : couleurPente(penteA(Math.max(0, d)));
+  const d0 = balade.distance, L = route.longueur, entier = L > 0;
+  const deb = entier ? 0 : d0 - 400, fin = entier ? L : d0 + 2600;
+  const n = entier ? Math.min(420, Math.max(60, Math.round(L / 20))) : 150, pas = (fin - deb) / n;
+  const calcul = () => { const a = []; let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i <= n; i++) { const v = monde3d ? monde3d.alt(deb + i * pas) : altitudeA(deb + i * pas); a.push(v); mn = Math.min(mn, v); mx = Math.max(mx, v); }
+    return { alts: a, mn, mx }; };
+  let P;
+  if (entier) { if (!profilCache || profilCache.r !== route || profilCache.L !== L || profilCache.m !== !!monde3d || Date.now() - profilCache.t > 5000) profilCache = Object.assign({ r: route, L, m: !!monde3d, t: Date.now() }, calcul()); P = profilCache; }
+  else P = calcul();
+  const alts = P.alts, etendue = Math.max(40, P.mx - P.mn), bas = P.mn - etendue * 0.15;
+  const haut = H - 8, bw = W / n;
+  const pos = !entier ? d0 : route.boucle ? ((d0 % L) + L) % L : Math.min(L, Math.max(0, d0));
+  const yAlt = (v) => H - 4 - ((v - bas) / (etendue * 1.3)) * haut;
+  const xPos = (d) => ((d - deb) / (fin - deb)) * W;
+  for (let i = 0; i < n; i++) {
+    const d = deb + i * pas, h = ((alts[i] - bas) / (etendue * 1.3)) * haut;
+    x.fillStyle = d < pos ? "rgba(140,150,165,.75)" : couleurPente(penteA(Math.max(0, d)));
     x.fillRect(i * bw, H - 4 - h, Math.ceil(bw) + 0.5, h);
   }
-  // (v69) repères de distance devant toi : 500 m, 1 km, 1,5 km…
+  // repères de distance
   x.font = "bold " + Math.round(H * 0.15) + "px sans-serif"; x.textBaseline = "bottom"; x.textAlign = "center";
-  for (let k = 500; k <= fin - d0 - 100; k += 500) {
-    const px = ((d0 + k - deb) / (fin - deb)) * W;
+  let pasKm = 500;
+  if (entier) { const km = L / 1000; pasKm = [0.5, 1, 2, 5, 10, 20, 25, 50].find((s) => km / s <= 8) * 1000 || 50000; }
+  for (let k = entier ? pasKm : 500; (entier ? k < fin - pasKm * 0.3 : k <= fin - d0 - 100); k += pasKm) {
+    const px = xPos(entier ? k : d0 + k);
     x.fillStyle = "rgba(255,255,255,.35)"; x.fillRect(px - 1, H * 0.62, 2, H * 0.38);
     x.fillStyle = "rgba(255,255,255,.85)"; x.fillText(k < 1000 ? k + " m" : fr1(k / 1000).replace(",0", "") + " km", px, H * 0.6);
   }
   x.textAlign = "left";
   if (typeof Progression !== "undefined") Progression.profil(x, deb, fin, W, H);   // segments chronométrés (v69)
-  const mxp = ((d0 - deb) / (fin - deb)) * W;
+  // autres participants : coureurs virtuels, amis, fantôme (position sur le tour)
+  const surTour = (d) => !entier ? d : route.boucle ? ((d % L) + L) % L : Math.min(L, Math.max(0, d));
+  const point = (d, coul, r) => { if (!entier && (d < deb || d > fin)) return; const p = surTour(d); x.fillStyle = coul; x.strokeStyle = "#fff"; x.lineWidth = 3; x.beginPath(); x.arc(xPos(p), yAlt(alts[Math.min(n, Math.max(0, Math.round((p - deb) / pas)))]), r, 0, 6.2832); x.fill(); x.stroke(); };
+  const autres = Peloton.actif() ? Peloton.coureurs() : typeof Revoir !== "undefined" && Revoir.actif ? Revoir.coureursCarte() : [];
+  for (const r of autres) point(r.d, hex6(r.couleur), 6);
+  if (typeof Groupe !== "undefined" && Groupe.actif()) for (const a of Groupe.positions()) point(a.d, hex6(a.couleur), 6);
+  if ($("fantome-pr").checked) { const g = distFantome(); if (g !== null) point(g, "#dfe6ee", 6); }
+  const mxp = xPos(pos);
   x.fillStyle = "#fff"; x.fillRect(mxp - 2, 2, 4, H - 4);
-  x.fillStyle = "#ff7a2f"; x.beginPath(); x.arc(mxp, H - 4 - ((monde3d ? monde3d.alt(d0) : altitudeA(d0)) - bas) / (etendue * 1.3) * haut, 9, 0, 6.2832); x.fill();
+  x.fillStyle = "#ff7a2f"; x.strokeStyle = "#fff"; x.lineWidth = 3; x.beginPath(); x.arc(mxp, yAlt(monde3d ? monde3d.alt(d0) : altitudeA(d0)), 9, 0, 6.2832); x.fill(); x.stroke();
 }
 
 /* =====================================================================
@@ -412,7 +434,16 @@ const Son = (function () {
     if (ne > eclairsVus && eclairsVus >= 0 && actif) tonnerre();
     eclairsVus = ne;
   }
-  return { init, maj, tonnerre,
+  // (v86) bip court (compte à rebours de la rampe de départ)
+  function bip(freq, dur) {
+    if (!ctx || !actif) return;
+    try {
+      const o = ctx.createOscillator(), g = ctx.createGain(), t = ctx.currentTime;
+      o.type = "sine"; o.frequency.value = freq; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.05, volume * 0.6), t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + dur + 0.05);
+    } catch (e) { /* le son ne doit jamais bloquer le départ */ }
+  }
+  return { init, maj, tonnerre, bip,
     regler: (a, vol) => { actif = a; volume = Math.min(1, Math.max(0, vol)) * 0.9; } };
 })();
 ["pointerdown", "keydown"].forEach((ev) => document.addEventListener(ev, () => Son.init(), { once: true }));
@@ -433,21 +464,69 @@ function annoncer(titre, detail, classe, duree) {
   a.hidden = false;
   annonceMinuteur = setTimeout(() => { a.hidden = true; }, (duree || 5) * 1000);
 }
+/* ---------- (v86) Contre-la-montre : vélo de CLM obligatoire, rampe de départ et compte à rebours ---------- */
+let rampe = null, classementFinalMontre = false, provFin = null, attenteFinale = false;
+function forcerVeloClm() {
+  const sel = $("avatar-velo");
+  if (materielVelo(sel.value, $("avatar-roues").value).clm) return;
+  veloAvantClm = sel.value; sel.value = "plasma"; appliquerAvatar(); majMateriel();
+  log("Contre-la-montre : vélo de chrono obligatoire, Scott Plasma RC sélectionné (ton vélo reviendra après la course).");
+}
+function rendreVelo() {
+  if (!veloAvantClm) return;
+  const v = veloAvantClm; veloAvantClm = null;
+  if ($("avatar-velo").querySelector('option[value="' + v + '"]')) { $("avatar-velo").value = v; appliquerAvatar(); majMateriel(); }
+}
+function demanderDepartRampe() {         // vrai = le départ est pris en charge par le compte à rebours de la rampe
+  if (!rampe || rampe.etat === "parti") return false;
+  if (rampe.etat === "attente") { rampe.etat = "compte"; rampe.fin = performance.now() + 10000; rampe.dernier = -1; }
+  return true;
+}
+function majRampe() {
+  if (!rampe || rampe.etat !== "compte") return;
+  const reste = Math.ceil((rampe.fin - performance.now()) / 1000);
+  if (reste > 0 && reste !== rampe.dernier) {
+    rampe.dernier = reste;
+    if (reste <= 5) { annoncer(String(reste), "Rampe de départ", "", 1.3); Son.bip(reste === 1 ? 880 : 660, 0.18); }
+    else if (reste === 10) annoncer("Départ dans 10 s", "L’assistant te tient sur la rampe : prépare-toi", "", 4);
+    if (monde3d && monde3d.compteRampe) monde3d.compteRampe(reste);
+  }
+  if (reste <= 0) {
+    rampe.etat = "parti";
+    balade.enCours = true; balade.auto = false; balade.immobile = 0; balade.dernier = maintenant(); balade.vitesse = 2.5;   // lâché par l’assistant, la rampe donne un peu de vitesse
+    if (!session.debut) session.debut = Date.now();
+    majBoutonBalade(); annoncer("Partez !", "", "arrivee", 2); Son.bip(1175, 0.5);
+    if (monde3d && monde3d.compteRampe) monde3d.compteRampe(0);
+    log("Départ du contre-la-montre.");
+  }
+}
 function lancerPeloton() {
   const pm = $("peloton-mode").value;
   // pendant l'échauffement : pas encore de course ; (v69 suite) étape d'un Tour : mode, nombre de tours et coureurs de l'étape ; on revoit une sortie : personne
   const et = typeof Tour !== "undefined" ? Tour.etapeEnCours() : null, revoir = typeof Revoir !== "undefined" && Revoir.actif;
   const mode = revoir || (typeof echauffementEnCours === "function" && echauffementEnCours()) || pm === "fantome" ? "aucun" : et ? et.mode : pm === "tour" ? "aucun" : pm;
+  // (v86) Course, contre-la-montre et Tour : toujours 40 coureurs (toi compris) ; course en équipe seulement dans un Tour
+  const compet = mode === "course" || mode === "clm", nombre = compet ? Peloton.MAX_IA : parseInt($("peloton-nombre").value, 10) || 8;
   Peloton.demarrer({ mode, niveau: et ? et.niveau : $("peloton-niveau").value, ftp: ftp(), poids: parseFloat($("poids").value) || 75, wprime: 14841,   /* (v72) réserve W′ des coureurs virtuels : valeur fixe, plus réglable */
-                     d0: balade.distance, longueur: route.longueur, boucle: !!route.boucle, pente: penteA, equipe: et ? Tour.equipe() : null,
-                     tours: route.boucle ? (et ? et.tours : parseInt($("peloton-tours").value, 10) || 0) : 0, nombre: parseInt($("peloton-nombre").value, 10) || 8 });
-  pelotonFinAnnonce = false; pelotonSig = ""; pelotonDernierTour = false; annoncer("");
+                     d0: balade.distance, longueur: route.longueur, boucle: !!route.boucle, pente: penteA, equipe: et ? Tour.equipe(mode) : null, enEquipe: false, parEquipe: !!(et && et.ttt),
+                     tours: route.boucle ? (et ? et.tours : parseInt($("peloton-tours").value, 10) || 0) : 0, nombre });
+  // (v86) contre-la-montre : vélo de CLM obligatoire et rampe de départ (jamais de rampe si la sortie est déjà commencée)
+  // (v89) après un échauffement, on s'arrête sur la rampe : le compte à rebours part au premier coup de pédale
+  if (mode === "clm") {
+    forcerVeloClm();
+    rampe = balade.temps > 0 && !departApresEchauffement ? { etat: "parti" } : { etat: "attente" };
+    if (departApresEchauffement) { balade.enCours = false; balade.auto = false; balade.vitesse = 0; majBoutonBalade(); }
+  } else { rendreVelo(); rampe = null; }
+  departApresEchauffement = false; provFin = null; attenteFinale = false;
+  if (monde3d && monde3d.definirRampe) monde3d.definirRampe(rampe && rampe.etat === "attente" ? balade.distance : null);
+  { const cf = $("clm-final"); if (cf) cf.hidden = true; }
+  pelotonFinAnnonce = false; classementFinalMontre = false; pelotonSig = ""; pelotonDernierTour = false; annoncer("");
   envoyerPeloton3D(); majHudPeloton();
 }
 function envoyerPeloton3D() {
   if (!monde3d) return;
   if (typeof Revoir !== "undefined" && Revoir.actif) { monde3d.definirPeloton(Revoir.liste3D()); return; }
-  const l = Peloton.actif() ? Peloton.coureurs().map((r) => ({ couleur: r.couleur, ampleur: r.ampleur, nom: r.nom, id: r.id, femme: r.femme, look: r.look })) : [];
+  const l = Peloton.actif() ? Peloton.coureurs().map((r) => ({ couleur: r.couleur, ampleur: r.ampleur, nom: r.nom, id: r.id, femme: r.femme, look: r.look, kit: r.kit })) : [];
   if ($("fantome-pr").checked) l.push({ couleur: 0xdfe6ee, ampleur: 1, nom: "Fantôme", fantome: true });
   if ($("fantome-seg").checked) l.push({ couleur: 0xffd84a, ampleur: 1, nom: "Ton record", fantome: true });   // (v69 suite) fantôme des segments
   if (typeof Groupe !== "undefined") l.push(...Groupe.liste3D());   // (v71) amis de la sortie de groupe, toujours en dernier
@@ -456,7 +535,7 @@ function envoyerPeloton3D() {
 function donnees3D(t) {
   const roule = balade.enCours, dt = roule ? Math.min((t - balade.tick) / 1000, 0.35) : 0;
   if (Peloton.actif()) Peloton.majVelos();                      // vélos des coureurs virtuels : même catégorie que le tien, même à l'arrêt
-  const l = Peloton.actif() ? Peloton.coureurs().map((r) => ({ d: r.d + r.v * dt * (roule ? 1 : 0), v: roule ? r.v : 0, cad: roule ? r.cad : 0, voie: r.voie, ratio: r.P / r.cp, pente: penteA(r.d) / 100,
+  const l = Peloton.actif() ? Peloton.coureurs().map((r) => ({ d: r.d + r.v * dt * (roule ? 1 : 0), v: roule ? r.v : 0, cad: roule ? r.cad : 0, voie: r.voie, ratio: r.P / r.cp, pente: penteA(r.d) / 100, reserve: r.wp > 0 ? Math.max(0, Math.min(1, r.wbal / r.wp)) : null, vide: !!r.vide,
     clm: !!r.clm, grp: r.grp || 0, velo: r.velo, roues: r.roues })) : [];
   if ($("fantome-pr").checked) {
     const g = distFantome();
@@ -471,6 +550,32 @@ function donnees3D(t) {
   return l.length ? l : null;
 }
 function hex6(c) { return "#" + ("000000" + c.toString(16)).slice(-6); }
+/* ---------- (v86) Contre-la-montre : animation du classement final ----------
+   Les lignes partent de l'ordre du classement provisoire (au dernier point de chrono) et glissent jusqu'à leur place définitive ; puis le rang et le temps de chacun s'affichent. */
+function montrerClassementFinal(prov, fin) {
+  let c = $("clm-final");
+  if (!c) { c = document.createElement("div"); c.id = "clm-final"; $("hz-annonce").parentElement.appendChild(c); }
+  const H = 26, n = fin.length, idxP = new Map(prov.map((nom, i) => [nom, i])), moiF = fin.findIndex((x) => x.user), vainqueur = fin[0].temps;
+  const hex = (v) => "#" + ("000000" + (v & 0xffffff).toString(16)).slice(-6);
+  c.innerHTML = '<div class="cf-t"><b>Classement final · contre-la-montre</b><button type="button" class="cf-x" aria-label="Fermer">×</button></div>' +
+    '<div class="cf-sous">Classement provisoire…</div><div class="cf-l"><div class="cf-i" style="height:' + n * H + 'px">' +
+    fin.map((x, i) => '<div class="cf-r' + (x.user ? " moi" : "") + '" data-i="' + i + '" style="transform:translateY(' + (idxP.has(x.nom) ? idxP.get(x.nom) : i) * H + 'px)"><i style="background:' + hex(x.couleur) + '"></i><b class="cf-n"></b><span>' + (x.eq === 0 && !x.user ? "★ " : "") + x.nom + '</span><em></em></div>').join("") + "</div></div>";
+  c.hidden = false;
+  c.querySelector(".cf-x").onclick = () => { c.hidden = true; };
+  const lst = c.querySelector(".cf-l"), rows = [...c.querySelectorAll(".cf-r")], rowMoi = rows[moiF];
+  const suivre = (idx) => { lst.scrollTop = Math.max(0, idx * H - 140); };
+  suivre(idxP.has("Toi") ? idxP.get("Toi") : moiF);
+  setTimeout(() => {                                    // glissement vers le classement final
+    c.querySelector(".cf-sous").textContent = "Classement final…";
+    rows.forEach((r, i) => { r.classList.add("glisse"); r.style.transform = "translateY(" + i * H + "px)"; });
+    lst.style.scrollBehavior = "smooth"; suivre(moiF);
+  }, 1500);
+  setTimeout(() => {                                    // rangs et temps
+    rows.forEach((r, i) => { r.querySelector(".cf-n").textContent = (i + 1) + "."; r.querySelector("em").textContent = i === 0 ? formatDuree(Math.round(fin[0].temps)) : "+" + (fin[i].temps - vainqueur >= 60 ? Math.floor((fin[i].temps - vainqueur) / 60) + ":" + deuxChiffres(Math.round((fin[i].temps - vainqueur) % 60)) : Math.round(fin[i].temps - vainqueur) + " s"); });
+    c.querySelector(".cf-sous").innerHTML = moiF === 0 ? "<b>Tu gagnes le contre-la-montre !</b>" : "Tu termines <b>" + (moiF + 1) + "e</b> sur " + n + " · à " + Math.round(fin[moiF].temps - vainqueur) + " s du vainqueur";
+    rowMoi.classList.add("final");
+  }, 4700);
+}
 function majHudPeloton() {
   const bloc = $("hz-peloton");
   if (!Peloton.actif()) { bloc.hidden = true; return; }
@@ -478,16 +583,17 @@ function majHudPeloton() {
   const cl = Peloton.classement(), clm = Peloton.mode() === "clm", course = Peloton.mode() === "course" || clm;
   const moi = cl.find((x) => x.user);
   const nt = Peloton.tours(), tourMoi = route.boucle && route.longueur > 0 ? Math.floor(Math.max(0, moi.d - Peloton.depart()) / route.longueur) + 1 : 0;
-  const titre = clm ? "Contre-la-montre · " + (moi.fini !== null ? "arrivée" : Peloton.parti() ? formatDuree(Peloton.temps()) : "au départ") + (nt > 1 && moi.fini === null && tourMoi ? " · tour " + Math.min(tourMoi, nt) + "/" + nt : "")
+  const titre = clm ? (Peloton.ttt() ? "CLM par équipe · " : "Contre-la-montre · ") + (moi.fini !== null ? "arrivée" : Peloton.parti() ? "classement provisoire · " + formatDuree(Peloton.temps()) : "au départ") + (nt > 1 && moi.fini === null && tourMoi ? " · tour " + Math.min(tourMoi, nt) + "/" + nt : "")
     : !course ? "Sortie endurance" : moi.fini !== null ? "Course · arrivée" : "Course · " + (tourMoi ? "tour " + Math.min(tourMoi, nt || tourMoi) + (nt ? "/" + nt : "") : "classement");
   const mj = typeof Tour !== "undefined" ? Tour.maillots() : null;
-  const maillot = (nom) => mj ? (mj.jaune === nom ? '<span class="mj jaune" title="Maillot jaune"></span>' : "") + (mj.pois === nom ? '<span class="mj pois" title="Maillot à pois"></span>' : "") : "";
+  const maillot = (nom) => mj ? (mj.jaune === nom ? '<span class="mj jaune" title="Maillot jaune"></span>' : "") + (mj.pois === nom ? '<span class="mj pois" title="Maillot à pois"></span>' : "") + (mj.vert === nom ? '<span class="mj vert" title="Maillot vert"></span>' : "") : "";
   const fmtE = (s) => { const a = Math.abs(s); return (s > 0 ? "+" : "−") + (a >= 60 ? Math.floor(a / 60) + ":" + deuxChiffres(Math.round(a % 60)) : Math.round(a) + "\u00a0s"); };
   let html = '<div class="tt">' + titre + "</div>";
   if (course && nt > 1 && tourMoi === nt && moi.fini === null && !pelotonDernierTour) { pelotonDernierTour = true; annoncer("Dernier tour", fr1(route.longueur / 1000) + " km avant l’arrivée", "", 5); }
   // beaucoup de coureurs : le premier et cinq lignes autour de toi (deux devant, deux derrière, décalées en tête ou en queue), les autres remplacés par « … »
-  const iMoi = cl.indexOf(moi), deb = Math.max(0, Math.min(iMoi - 2, cl.length - 5));
-  const montres = cl.length <= 8 ? null : new Set([0, deb, deb + 1, deb + 2, deb + 3, deb + 4]);
+  // (v90) classement plus court : le premier, toi et un coureur de chaque côté, le reste replié
+  const iMoi = cl.indexOf(moi), deb = Math.max(0, Math.min(iMoi - 1, cl.length - 3));
+  const montres = cl.length <= 8 ? null : new Set([0, deb, deb + 1, deb + 2]);
   cl.forEach((x, i) => {
     if (montres && !montres.has(i)) { if (montres.has(i - 1)) html += '<div class="pl sep">…</div>'; return; }
     let ecart = "";
@@ -498,13 +604,30 @@ function majHudPeloton() {
     else { const e = Math.round(x.d - moi.d); ecart = (e >= 0 ? "+" : "−") + Math.abs(e) + "\u00a0m"; }
     const banal = !x.etat || x.etat === "Au départ" || x.etat === "Endurance" || x.etat === "Dans le peloton" || x.etat === "Dans la roue" || x.etat === "Départ tranquille" || x.etat === "Chrono";
     const sous = x.user || banal ? "" : '<span class="sb">' + x.etat + "</span>";
-    html += '<div class="pl' + (x.user ? " moi" : "") + '"><i style="background:' + hex6(x.couleur) + '"></i><b>' + (course ? (i + 1) + ". " : "") + maillot(x.nom) + x.nom + "</b><em>" + ecart + "</em>" + sous + "</div>";
+    html += '<div class="pl' + (x.user ? " moi" : "") + '"><i style="background:' + hex6(x.couleur) + '"></i><b>' + (course ? (i + 1) + ". " : "") + maillot(x.nom) + (x.eq === 0 && !x.user ? "★ " : "") + x.nom + "</b><em>" + ecart + "</em>" + sous + "</div>";
   });
+  // (v87) CLM par équipe : où sont tes coéquipiers par rapport à toi (pour rester dans la file)
+  if (Peloton.ttt() && moi.fini === null && Peloton.parti()) html += '<div class="tt">Ton équipe</div>' + Peloton.equipiers().map((x) => '<div class="pl"><b>★ ' + x.nom + '</b><em>' + (x.ecart >= 0 ? "+" : "−") + Math.abs(Math.round(x.ecart)) + "\u00a0m</em></div>").join("");
   if (course && moi.fini !== null && !pelotonFinAnnonce) {
     pelotonFinAnnonce = true;
-    const rang = cl.indexOf(moi) + 1;
-    log((clm ? "Arrivée du contre-la-montre" : "Arrivée de la course") + " : tu termines " + rang + "e sur " + cl.length + " en " + formatDuree(Math.round(moi.fini)) + (clm ? " (classement provisoire : certains coureurs roulent encore)" : "") + ".");
-    annoncer(rang === 1 ? (clm ? "Meilleur temps !" : "Victoire !") : "Arrivée", (rang === 1 ? "1er" : rang + "e") + " sur " + cl.length + " · " + formatDuree(Math.round(moi.fini)) + (clm ? " · provisoire" : ""), "arrivee", 10);
+    if (clm) {
+      // (v86) la suite de la course est jouée en accéléré (classement final exact), puis le classement provisoire s'anime jusqu'au final ;
+      // (v89) à raison de 1 500 pas par image, pour ne pas figer l'écran
+      if (!provFin) provFin = cl.map((x) => x.nom);
+      if (!Peloton.finaliser(1500)) {
+        pelotonFinAnnonce = false;
+        if (!attenteFinale) { attenteFinale = true; annoncer("Arrivée !", "Calcul du classement final…", "arrivee", 60); }
+      } else {
+        const fin = Peloton.classementFinal(), rangF = fin.findIndex((x) => x.user) + 1;
+        log("Arrivée du contre-la-montre" + (Peloton.ttt() ? " par équipe : ton équipe est " : " : tu termines ") + rangF + "e sur " + fin.length + " en " + formatDuree(Math.round(moi.fini)) + ".");
+        annoncer(rangF === 1 ? "Meilleur temps !" : "Arrivée", (rangF === 1 ? "1er" : rangF + "e") + " sur " + fin.length + " · " + formatDuree(Math.round(moi.fini)), "arrivee", 6);
+        montrerClassementFinal(provFin, fin);
+      }
+    } else {
+      const rang = cl.indexOf(moi) + 1;
+      log("Arrivée de la course : tu termines " + rang + "e sur " + cl.length + " en " + formatDuree(Math.round(moi.fini)) + ".");
+      annoncer(rang === 1 ? "Victoire !" : "Arrivée", (rang === 1 ? "1er" : rang + "e") + " sur " + cl.length + " · " + formatDuree(Math.round(moi.fini)), "arrivee", 10);
+    }
   }
   if (html !== pelotonSig) { pelotonSig = html; $("hz-peloton-c").innerHTML = html; }
 }
@@ -696,7 +819,7 @@ function boucle3D() {
       vitesse: rp ? rp.v : balade.enCours ? balade.vitesse : 0, cadence: rp ? rp.c : balade.enCours ? balade.cadence : 0,
       ratio: rp ? rp.ratio : balade.enCours ? (balade.ratio || 0) : 0,
       peloton: rp ? rp.peloton : donnees3D(t),
-      vibre: rp || !balade.enCours || !$("vibrations").checked ? 0 : rv === "pave" ? 1 : rv === "gravier" ? 0.35 : 0   // (v69 suite) secousses sur les pavés
+      vibre: 0   // (v82) plus de secousses de la caméra sur les pavés
     });
     if (typeof Photos !== "undefined") Photos.apresDessin($("monde3d"));   // (v72) photo demandée : copiée juste après le dessin
   } catch (err) {

@@ -338,7 +338,6 @@ const Progression = (function () {
         x.fillRect(xa, 4, xb - xa, H * 0.06);
         x.globalAlpha = 0.18; x.fillRect(xa, 4, xb - xa, H - 8);
         x.globalAlpha = 1;
-        if (xa > -20 && xa < W - 60) { x.fillStyle = "#fff"; x.fillText(TYPES_SEG[sg.type].ico + " " + sg.nom, Math.max(4, xa + 4), 6 + H * 0.07); }
       }
     }
   }
@@ -493,13 +492,20 @@ const Progression = (function () {
   }
 
   // page d'accueil (onglet Rouler) : niveau et défis de la semaine
-  function majAccueil() {
+  function majAccueil() {                    // (v76) niveau en grand, bonus à gagner (défis de la semaine, défis au long cours), badges
     const c = $("accueil-prog");
     if (!c) return;
-    const nv = niveau(prog.xp);
-    c.innerHTML = '<div class="ap-tete"><div class="pg-rond petit"><b>' + nv.n + "</b></div><div><b>" + nv.titre + "</b>" + barre(nv.frac) + '<span class="pg-petit">' + Math.round(nv.dans) + " / " + nv.besoin + " XP</span></div></div>" +
-      '<div class="ap-defis">' + etatDefis(false).map((d) => '<div class="ap-defi' + (d.fait ? " fait" : "") + '"><span>' + (d.fait ? "✓ " : "") + d.txt + "</span>" + barre(d.v / d.n, d.fait ? "#4FD69C" : null) + "</div>").join("") +
-      etatLongs().map((d) => '<div class="ap-defi"><span>' + d.ico + " " + d.nom + " · " + d.jr + " j</span>" + barre(d.v / d.n, "#FFB627") + "</div>").join("") + "</div>";
+    const nv = niveau(prog.xp), defis = etatDefis(false), longs = etatLongs();
+    const reste = nv.n >= 50 ? 0 : Math.max(0, Math.ceil(nv.besoin - nv.dans));
+    const bonus = defis.filter((d) => !d.fait).reduce((t, d) => t + d.xp, 0);
+    const nbB = BADGES.filter((b) => prog.badges[b.id]).length;
+    let h = '<div class="ap-tete"><div class="pg-rond"><span>Niveau</span><b>' + nv.n + '</b></div><div class="ap-niv"><b>' + nv.titre + "</b>" +
+      barre(nv.frac) + '<span class="pg-petit">' + (nv.n >= 50 ? "Niveau maximum" : Math.round(nv.dans) + " / " + nv.besoin + " XP · encore <b>" + reste + " XP</b> pour le niveau " + (nv.n + 1)) + "</span></div></div>";
+    h += '<div class="ap-titre"><span>Bonus de la semaine</span>' + (bonus ? "<em>+" + bonus + " XP à gagner</em>" : "<em class=\"ok\">Tout est fait ✓</em>") + "</div>";
+    h += '<div class="ap-defis">' + defis.map((d) => '<div class="ap-defi' + (d.fait ? " fait" : "") + '"><div class="ap-dl"><span>' + (d.fait ? "✓ " : "") + d.txt + "</span><i>+" + d.xp + " XP</i></div>" + barre(d.v / d.n, d.fait ? "#4FD69C" : null) + "</div>").join("") + "</div>";
+    if (longs.length) h += '<div class="ap-titre ap-long"><span>Défis au long cours</span></div><div class="ap-defis ap-long">' + longs.map((d) => '<div class="ap-defi"><div class="ap-dl"><span>' + d.ico + " " + d.nom + " · " + d.jr + ' j</span><i>+' + d.xp + " XP</i></div>" + barre(d.v / d.n, "#FFB627") + "</div>").join("") + "</div>";
+    h += '<div class="ap-titre ap-bad"><span>Badges</span><em>' + nbB + " / " + BADGES.length + '</em></div><div class="ap-badges ap-bad">' + BADGES.map((b) => '<i class="' + (prog.badges[b.id] ? "on" : "") + '" title="' + b.nom + " : " + b.desc + '">' + b.ico + "</i>").join("") + "</div>";
+    c.innerHTML = h;
   }
 
   document.addEventListener("DOMContentLoaded", () => { majPuce(); majAccueil(); });

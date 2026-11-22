@@ -190,6 +190,9 @@ function lancerEchauffement() {
   const avant = seance.avantEchauf || { intervalles: seance.intervalles, nom: seance.nom, textes: seance.textes };
   chargerSeance(ECHAUFFEMENT, true, "Échauffement", [[2, "Échauffement : 10 min, puis départ de la course", 6], [420, "Une minute à 90 % pour réveiller les jambes", 6], [540, "Départ de la course dans 1 minute !", 6]]);
   seance.puisCourse = true; seance.avantEchauf = avant;
+  // (v89) contre-la-montre : l'échauffement se fait déjà sur le vélo de chrono
+  const et = typeof Tour !== "undefined" ? Tour.etapeEnCours() : null;
+  if ((et ? et.mode : $("peloton-mode").value) === "clm" && typeof forcerVeloClm === "function") forcerVeloClm();
 }
 const echauffementEnCours = () => !!seance.puisCourse && modeActuel() === "erg";
 function rendreSeanceAvantEchauffement() {
@@ -210,6 +213,9 @@ function finEchauffement() {                                   // départ de la 
   seance.puisCourse = false;
   rendreSeanceAvantEchauffement();
   document.querySelector("input[name=mode][value=route]").checked = true; reinitialiserEnvois();
+  // (v91) la course part toujours du début : on revient au départ, la distance de l'échauffement est gardée à part (`deplace`) pour que le .FIT et la vitesse moyenne restent justes
+  { const dW = balade.distance - (balade.d0 || 0); if (dW > 0) { balade.deplace = (balade.deplace || 0) + dW; balade.distance = balade.d0 || 0; balade.altitude = balade.d0 ? altitudeA(balade.d0) : route.alt0; } if (typeof Progression !== "undefined") Progression.oublierSortie(); }
+  departApresEchauffement = true;                                // (v89) contre-la-montre : retour sur la rampe de départ
   lancerPeloton();
   if (typeof annoncer === "function") annoncer("Départ de la course !", "Échauffement terminé · bonne course", "arrivee", 6);
   log("Échauffement terminé : départ de la course.");
@@ -238,43 +244,83 @@ let seancesImportees = [];
 function lireImportees() { try { seancesImportees = JSON.parse(localStorage.getItem(CLE_SEANCES) || "[]"); } catch (e) { seancesImportees = []; } if (!Array.isArray(seancesImportees)) seancesImportees = []; }
 function sauverImportees() { try { localStorage.setItem(CLE_SEANCES, JSON.stringify(seancesImportees)); } catch (e) { /* ignoré */ } }
 
-function carteSeance(nom, desc, ints, supprimer, textes, modifier) {
-  const st = statsSeance(ints);
-  const div = document.createElement("div"); div.className = "seance-carte";
-  div.innerHTML = '<div class="nom"></div><div class="desc"></div><canvas></canvas><div class="meta"></div><div class="boutons"></div>';
-  div.querySelector(".nom").textContent = nom;
-  div.querySelector(".desc").textContent = desc || "";
-  div.querySelector(".meta").textContent = formatDuree(Math.round(st.sec)) + " · intensité " + fr2(st.IF) + " · TSS ≈ " + Math.round(st.tss);
-  const bt = div.querySelector(".boutons");
-  const b1 = document.createElement("button"); b1.textContent = "Charger";
-  b1.addEventListener("click", () => { chargerSeance(ints, false, nom, textes); log("Séance « " + nom + " » chargée."); });
-  const b2 = document.createElement("button"); b2.className = "plein"; b2.textContent = "Rouler cette séance";
-  b2.addEventListener("click", () => { chargerSeance(ints, true, nom, textes); choisirSeanceChargee(); log("Séance « " + nom + " » chargée."); });
-  bt.append(b1, b2);
-  if (modifier) { const b4 = document.createElement("button"); b4.className = "petit"; b4.textContent = "Modifier"; b4.addEventListener("click", modifier); bt.append(b4); }   // (v69 suite) séance créée
-  if (supprimer) { const b3 = document.createElement("button"); b3.className = "petit"; b3.textContent = "Supprimer"; b3.addEventListener("click", supprimer); bt.append(b3); }
-  return { div, canvas: div.querySelector("canvas"), ints };
+/* ----- (v76) Bibliothèque : liste à gauche (filtres par catégorie), détail de la séance choisie à droite ----- */
+const SQ = { filtre: "toutes", sel: "" };
+const SQ_FILTRES = [["toutes", "Toutes"], ["Endurance et récupération", "Endurance"], ["Tempo et sweet spot", "Tempo"], ["Seuil", "Seuil"], ["VO2max et anaérobie", "VO2max"], ["Tests", "Tests"], ["mes", "Mes séances"]];
+const niveauSeance = (IF) => (IF < 0.6 ? "Facile" : IF < 0.75 ? "Modérée" : IF < 0.9 ? "Soutenue" : IF < 1.02 ? "Dure" : "Très dure");
+function itemsBiblio() {
+  const l = [];
+  seancesImportees.forEach((s, i) => l.push({ cle: "imp:" + s.nom, cat: "mes", nom: s.nom, desc: (s.cree ? "Créée par toi." : "Importée depuis un fichier.") + (s.textes && s.textes.length ? " Contient des messages affichés pendant l’effort." : ""),
+    ints: s.ints, textes: s.textes, modif: s.cree && typeof Createur !== "undefined" ? () => Createur.modifier(s) : null,
+    suppr: () => { if (!confirm("Supprimer la séance « " + s.nom + " » ?")) return; seancesImportees.splice(i, 1); sauverImportees(); rendreBiblio(); } }));
+  BIBLIO.forEach((b, i) => l.push({ cle: "bib:" + i, cat: b.cat, nom: b.nom, desc: b.desc, ints: blocsVersIntervalles(b.blocs) }));
+  return l;
 }
 function rendreBiblio() {
-  const conteneur = $("biblio");
-  conteneur.innerHTML = "";
-  const cartes = [];
-  const groupes = [];
-  if (seancesImportees.length) groupes.push({ cat: "Mes séances (créées ou importées)", items: seancesImportees.map((s, i) => ({ nom: s.nom, desc: (s.cree ? "Créée par toi." : "Importée depuis un fichier.") + (s.textes && s.textes.length ? " " + s.textes.length + " message" + (s.textes.length > 1 ? "s" : "") + " affiché" + (s.textes.length > 1 ? "s" : "") + " pendant la séance." : ""), ints: s.ints, textes: s.textes,
-    modif: s.cree && typeof Createur !== "undefined" ? () => Createur.modifier(s) : null, suppr: () => { if (!confirm("Supprimer la séance « " + s.nom + " » ?")) return; seancesImportees.splice(i, 1); sauverImportees(); rendreBiblio(); } })) });
-  for (const b of BIBLIO) {
-    let g = groupes.find((x) => x.cat === b.cat);
-    if (!g) { g = { cat: b.cat, items: [] }; groupes.push(g); }
-    g.items.push({ nom: b.nom, desc: b.desc, ints: blocsVersIntervalles(b.blocs) });
+  const tous = itemsBiblio();
+  const liste = SQ.filtre === "toutes" ? tous : tous.filter((x) => x.cat === SQ.filtre);
+  const fb = $("sq-filtres"); fb.innerHTML = "";
+  for (const [k, t] of SQ_FILTRES) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "sq-pastille" + (SQ.filtre === k ? " actif" : ""); b.textContent = t;
+    b.addEventListener("click", () => { SQ.filtre = k; rendreBiblio(); });
+    fb.append(b);
   }
-  for (const g of groupes) {
-    const h = document.createElement("h3"); h.textContent = g.cat; conteneur.append(h);
-    const grille = document.createElement("div"); grille.className = "grille-seances"; conteneur.append(grille);
-    for (const it of g.items) { const c = carteSeance(it.nom, it.desc, it.ints, it.suppr, it.textes, it.modif); grille.append(c.div); cartes.push(c); }
+  const conteneur = $("biblio"); conteneur.innerHTML = "";
+  if (!liste.length) { conteneur.innerHTML = '<div class="info">Aucune séance ici. Crée-en une dans l’onglet « Créer » ou importe un fichier .erg, .mrc ou .zwo.</div>'; }
+  if (!liste.some((x) => x.cle === SQ.sel)) SQ.sel = liste.length ? liste[0].cle : "";
+  for (const it of liste) {
+    const st = statsSeance(it.ints);
+    const b = document.createElement("button"); b.type = "button"; b.className = "sq-item" + (it.cle === SQ.sel ? " sel" : ""); b.dataset.cle = it.cle;
+    b.innerHTML = '<span class="sq-t"><b></b><small></small></span><canvas></canvas>';
+    b.querySelector("b").textContent = it.nom;
+    b.querySelector("small").textContent = formatDuree(Math.round(st.sec)) + " · " + niveauSeance(st.IF).toLowerCase();
+    b.addEventListener("click", () => { SQ.sel = it.cle; rendreBiblio(); });
+    b.addEventListener("dblclick", () => rouleSeance(it));
+    conteneur.append(b);
   }
-  requestAnimationFrame(() => cartes.forEach((c) => dessinerBlocs(c.canvas, c.ints)));
+  rendreDetailSeance(tous.find((x) => x.cle === SQ.sel));
+  redessinerBiblio();
   majChoixSeanceMonde();
 }
+function rendreDetailSeance(it) {
+  const d = $("sq-detail");
+  if (!it) { d.innerHTML = '<div class="info">Choisis une séance dans la liste.</div>'; return; }
+  const st = statsSeance(it.ints);
+  d.innerHTML = '<h3 class="sq-nom"></h3><div class="sq-pills"></div><canvas id="sq-profil" aria-label="Profil de la séance"></canvas><p class="sq-desc"></p>' +
+    '<details class="sq-ints"><summary>Voir les intervalles</summary><ol></ol></details>' +
+    '<div class="sq-res">Résistance : <b>mode ERG</b>, le home trainer suit la séance (autres modes dans « Réglages avancés »).</div>' +
+    '<div class="sq-actions"><button type="button" class="plein" id="sq-rouler">Rouler cette séance ▶</button></div>';
+  d.querySelector(".sq-nom").textContent = it.nom;
+  d.querySelector(".sq-desc").textContent = it.desc || "";
+  for (const t of [formatDuree(Math.round(st.sec)), "Intensité " + fr2(st.IF), "TSS ≈ " + Math.round(st.tss), niveauSeance(st.IF)]) { const s = document.createElement("span"); s.textContent = t; d.querySelector(".sq-pills").append(s); }
+  const ol = d.querySelector(".sq-ints ol"); for (const iv of it.ints) { const li = document.createElement("li"); li.textContent = libelleInt(iv); ol.append(li); }
+  $("sq-rouler").addEventListener("click", () => rouleSeance(it));
+  const act = d.querySelector(".sq-actions");
+  if (it.modif) { const b = document.createElement("button"); b.type = "button"; b.textContent = "Modifier"; b.addEventListener("click", it.modif); act.append(b); }
+  if (it.suppr) { const b = document.createElement("button"); b.type = "button"; b.className = "petit"; b.textContent = "Supprimer"; b.addEventListener("click", it.suppr); act.append(b); }
+}
+function redessinerBiblio() {
+  requestAnimationFrame(() => {
+    const items = itemsBiblio();
+    document.querySelectorAll("#biblio .sq-item").forEach((b) => { const it = items.find((x) => x.cle === b.dataset.cle); if (it) dessinerBlocs(b.querySelector("canvas"), it.ints); });
+    const it = items.find((x) => x.cle === SQ.sel), c = $("sq-profil");
+    if (it && c) dessinerBlocs(c, it.ints);
+  });
+}
+function rouleSeance(it) {                           // charge la séance en mode ERG, retient-la pour la sortie et ouvre la page Rouler
+  chargerSeance(it.ints, true, it.nom, it.textes);
+  choisirSeanceChargee();
+  log("Séance « " + it.nom + " » chargée : choisis ton parcours puis « C’est parti ».");
+  afficherOnglet("world");
+  if ($("world-choix").hidden && !session.samples.length) $("btn-changer-monde").click();
+}
+function sqOnglet(nom) {                             // onglets de la page Séances
+  for (const n of ["biblio", "creer", "direct"]) $("sq-" + n).hidden = n !== nom;
+  document.querySelectorAll("#sq-onglets button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.sq === nom)));
+  setTimeout(() => { if (nom === "biblio") redessinerBiblio(); window.dispatchEvent(new Event("resize")); }, 0);
+}
+document.querySelectorAll("#sq-onglets button").forEach((b) => b.addEventListener("click", () => sqOnglet(b.dataset.sq)));
+window.addEventListener("resize", () => { if (!$("onglet-seance").hidden && !$("sq-biblio").hidden) redessinerBiblio(); });
 
 /* ----- Import de fichiers .erg / .mrc / .zwo ----- */
 function pointsVersBlocs(points, pourcent) {
@@ -440,7 +486,7 @@ function resumer(s, ftpVal, fcmaxVal) {
 
   let dplus = 0;
   for (let i = 1; i < n; i++) { const d = s[i].alt - s[i - 1].alt; if (d > 0) dplus += d; }
-  const distance = n ? s[n - 1].d : 0;
+  const distance = n ? (s[n - 1].dc !== undefined ? s[n - 1].dc : s[n - 1].d) : 0;   // (v91) dc : distance cumulée, échauffement compris
   const kj = somme / 1000;
 
   const zonesP = ZONES_P.map(() => 0), zonesFC = ZONES_FC.map(() => 0);
@@ -713,7 +759,7 @@ function construireFit(s, debutMs) {
   const moyP = n ? pw.reduce((a, b) => a + b, 0) / n : 0;
   const maxP = pw.reduce((a, b) => Math.max(a, b), 0);
   const maxFc = fcs.reduce((a, b) => Math.max(a, b), 0);
-  const distanceTotale = s[n - 1].d;
+  const distanceTotale = s[n - 1].dc !== undefined ? s[n - 1].dc : s[n - 1].d;
 
   definition(0, 0, [[0, 1, ENUM], [1, 2, UINT16], [2, 2, UINT16], [3, 4, UINT32Z], [4, 4, UINT32]]);
   u8(0); u8(4); u16(255); u16(0); u32(1234567); u32(debut);
@@ -728,7 +774,7 @@ function construireFit(s, debutMs) {
     if (i && W[i] - W[i - 1] > 1) { evenement(debut + W[i - 1], 4); evenement(debut + W[i] - 1, 0); }
     u8(1);
     u32(debut + W[i]);
-    u32(entier(x.d * 100, 4294967294));
+    u32(entier((x.dc !== undefined ? x.dc : x.d) * 100, 4294967294));
     u16(entier((x.alt + 500) * 5, 65534));
     u16(entier(x.v * 1000, 65534));
     u16(x.p === null ? 0xFFFF : entier(x.p, 65534));

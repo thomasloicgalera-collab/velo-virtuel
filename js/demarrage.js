@@ -4,6 +4,7 @@
    ===================================================================== */
 $("btn-balade").addEventListener("click", () => {
   if (typeof Revoir !== "undefined" && Revoir.actif) { Revoir.basculer(); return; }   // (v69 suite) on revoit une sortie : pas d'enregistrement
+  if (!balade.enCours && typeof demanderDepartRampe === "function" && demanderDepartRampe()) return;   // (v86) contre-la-montre : compte à rebours de la rampe
   balade.enCours = !balade.enCours;
   balade.auto = false; balade.immobile = 0;
   if (balade.enCours && !session.debut) session.debut = Date.now();
@@ -23,7 +24,7 @@ majTexteDescente();
 $("auto-pause").addEventListener("change", () => { balade.auto = false; sauverReglages(); });
 $("auto-depart").addEventListener("change", sauverReglages);
 $("freinage").addEventListener("change", () => { Aero.reg.frein = $("freinage").checked; sauverReglages(); });
-["vibrations", "ravito"].forEach((id) => $(id).addEventListener("change", () => sauverReglages()));   // (v72) les vibrations ne touchent plus le home trainer
+["ravito"].forEach((id) => $(id).addEventListener("change", () => sauverReglages()));   // (v72) les vibrations ne touchent plus le home trainer
 function lireAero() { Aero.reg.vent = $("vent-actif").checked; Aero.reg.materiel = parseFloat($("materiel-aero").value) || 0; majMateriel(); }
 // vélo et roues choisis : leur poids et leur gain d'air entrent dans la vitesse (et le gain d'air dans la résistance du home trainer) ; fiche résumée
 function majMateriel() {
@@ -75,7 +76,7 @@ function marquerPastilles() {
     $(id).querySelectorAll("button").forEach((b) => b.classList.toggle("choisi", b.dataset.val === $(champ).value));
 }
 function lireApparence() {
-  return { peau: parseInt($("avatar-peau").value, 10), cheveux: parseInt($("avatar-cheveux").value, 10), coiffure: $("avatar-coiffure").value, barbe: $("avatar-barbe").value, casqueCouleur: parseInt($("avatar-casque-couleur").value, 10), verres: $("avatar-verres").value,
+  return { peau: parseInt($("avatar-peau").value, 10), cheveux: parseInt($("avatar-cheveux").value, 10), coiffure: $("avatar-coiffure").value, barbe: $("avatar-barbe").value, casqueCouleur: parseInt($("avatar-casque-couleur").value, 10), casqueStyle: $("avatar-casque-style").value, verres: $("avatar-verres").value,
     bas: parseInt($("avatar-bas").value, 10), chaussettes: parseInt($("avatar-chaussettes").value, 10), yeux: $("avatar-yeux").value, basStyle: $("avatar-bas-style").value, casque: $("avatar-casque").checked, lunettes: $("avatar-lunettes").checked, realiste: $("avatar-realiste").checked, velo: $("avatar-velo").value, roues: $("avatar-roues").value };
 }
 function dessinPolygones() {
@@ -172,7 +173,7 @@ remplirPastilles("pastilles-peau", PEAUX, "avatar-peau");
 remplirPastilles("pastilles-cheveux", CHEVEUX, "avatar-cheveux");
 marquerPastilles();
 $("sexe").addEventListener("change", () => { $("avatar-coiffure").value = $("sexe").value === "femme" ? "chignon" : "court"; appliquerAvatar(); sauverReglages(); });
-["avatar-maillot", "avatar-coiffure", "avatar-barbe", "avatar-casque-couleur", "avatar-verres", "avatar-bas", "avatar-chaussettes", "avatar-yeux", "avatar-bas-style", "avatar-casque", "avatar-lunettes", "avatar-realiste", "avatar-velo", "avatar-roues"].forEach((id) => $(id).addEventListener("change", () => { appliquerAvatar(); sauverReglages(); }));
+["avatar-maillot", "avatar-coiffure", "avatar-barbe", "avatar-casque-couleur", "avatar-casque-style", "avatar-verres", "avatar-bas", "avatar-chaussettes", "avatar-yeux", "avatar-bas-style", "avatar-casque", "avatar-lunettes", "avatar-realiste", "avatar-velo", "avatar-roues"].forEach((id) => $(id).addEventListener("change", () => { if (id === "avatar-velo") veloAvantClm = null; appliquerAvatar(); sauverReglages(); }));   // (v89) un vélo choisi à la main n'est plus remplacé par celui d'avant le contre-la-montre
 ["peloton-mode", "peloton-niveau"].forEach((id) => $(id).addEventListener("change", sauverReglages));
 $("peloton-tours").addEventListener("change", () => { sauverReglages(); majResumeChoix(); });
 $("peloton-nombre").addEventListener("change", sauverReglages);
@@ -235,7 +236,7 @@ function tirerAmbiance(appliquer) {
   if (r.fantomePR) $("fantome-pr").checked = true;
   if (r.fantomeSeg === false) $("fantome-seg").checked = false;
   if (r.echauffement) $("echauffement").checked = true;
-  for (const [cle, id] of [["vibrations", "vibrations"], ["ravito", "ravito"], ["zonesFcAuto", "zones-fc-auto"]]) if (r[cle] === false) $(id).checked = false;   // (v69 suite)
+  for (const [cle, id] of [["ravito", "ravito"], ["zonesFcAuto", "zones-fc-auto"]]) if (r[cle] === false) $(id).checked = false;   // (v69 suite)
   $("freinage").checked = true; Aero.reg.frein = true;      // (v72) freinage avant les virages toujours actif, plus réglable
   if (r.hudTaille) $("hud-taille").value = r.hudTaille;
   appliquerTailleHud();
@@ -254,6 +255,7 @@ function tirerAmbiance(appliquer) {
     if (ap.coiffure) $("avatar-coiffure").value = ap.coiffure;
     if (ap.barbe) $("avatar-barbe").value = ap.barbe;
     if (ap.casqueCouleur) $("avatar-casque-couleur").value = String(ap.casqueCouleur);
+    if (ap.casqueStyle && $("avatar-casque-style").querySelector("option[value=\"" + ap.casqueStyle + "\"]")) $("avatar-casque-style").value = ap.casqueStyle;
     if (ap.verres) $("avatar-verres").value = ap.verres;
     if (ap.velo && $("avatar-velo").querySelector('option[value="' + ap.velo + '"]')) $("avatar-velo").value = ap.velo;
     if (ap.roues && $("avatar-roues").querySelector('option[value="' + ap.roues + '"]')) $("avatar-roues").value = ap.roues;

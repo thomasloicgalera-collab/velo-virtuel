@@ -7,7 +7,7 @@
    application : on les ajoute à la main sur la page de l'activité). */
 const Photos = (function () {
   const MAX = 5;
-  const EXCLUS = new Set(["monde3d", "flash-photo", "aide-clavier", "hz-annonce"]);   // pas sur la photo : l'image 3D (copiée à part), l'éclair, l'aide, les annonces
+  const EXCLUS = new Set(["monde3d", "flash-photo", "aide-clavier", "hz-annonce", "dock-jeu", "panneau-hud"]);   // pas sur la photo : l'image 3D (copiée à part), l'éclair, l'aide, les annonces
   let liste = [], seanceId = null, demande = false, enCours = false;
 
   function prendre() {

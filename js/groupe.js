@@ -25,7 +25,7 @@ const Groupe = (function () {
       vent: hote ? [Aero.v.dir, Aero.v.vit] : null,
       meteo: hote && monde3d && monde3d.meteo ? monde3d.meteo().etat : null,   // météo du créateur : la pluie freine (roulement), elle doit être la même pour tous        // le vent du créateur s'impose à tout le groupe (sinon chacun tire le sien : courses inégales)
       couleur: parseInt($("avatar-maillot").value, 10), velo: id, roues: a.roues || "35", clm: !!(Aero.reg && Aero.reg.clm),
-      perso: { genre: $("sexe").value, peau: a.peau, cheveux: a.cheveux, coupe: a.coiffure, barbe: a.barbe, casque: a.casque ? a.casqueCouleur : null, lunettes: !!a.lunettes, verres: a.verres } };
+      perso: { genre: $("sexe").value, peau: a.peau, cheveux: a.cheveux, coupe: a.coiffure, barbe: a.barbe, casque: a.casque ? a.casqueCouleur : null, casqueStyle: a.casqueStyle, lunettes: !!a.lunettes, verres: a.verres } };
   }
 
   // ---- connexion ----
@@ -125,6 +125,7 @@ const Groupe = (function () {
     if ($("world-choix").hidden || session.samples.length || !MONDES.some((x) => x.id === m.monde)) return;
     const sel = $("depart-km");
     if ([...sel.options].some((o) => o.value === String(m.d0))) { sel.value = String(m.d0); majResumeChoix(); }
+    else if (m.d0 > 0) { log("Le créateur part du km " + fr1(m.d0 / 1000) + " : ce départ n’existe plus, tu pars du début du parcours."); annoncer("Départ du groupe", "Tu pars du début, le créateur non (ancienne version)", "", 5); }   // (v91)
     $("btn-cest-parti").click();
     annoncer("Départ du groupe", "", "", 3);
   }
@@ -153,6 +154,7 @@ const Groupe = (function () {
     sig3D = s;
     if (typeof envoyerPeloton3D === "function") envoyerPeloton3D();
   }
+  function positions() { const t = performance.now(); return surMonMonde().map((a) => ({ d: a.d + a.v * Math.min((t - a.t) / 1000, 1), couleur: a.couleur, nom: a.nom })); }   // (v78) pour le profil du HUD
   function liste3D() { return surMonMonde().map((a) => ({ couleur: a.couleur, ampleur: 1, nom: a.nom, perso: a.perso })); }
   function donnees3D() {
     const t = performance.now();
@@ -213,5 +215,5 @@ const Groupe = (function () {
   $("btn-groupe-quitter").addEventListener("click", () => { if (connecte()) envoyer({ k: "parti", id: monId }); quitter(); });
   rendre();
 
-  return { liste3D, donnees3D, abriPour, actif: () => !!peer && amis.size > 0, code: () => code };
+  return { positions, liste3D, donnees3D, abriPour, actif: () => !!peer && amis.size > 0, code: () => code };
 })();

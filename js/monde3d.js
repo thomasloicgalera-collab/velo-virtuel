@@ -62,6 +62,16 @@ const Monde3D = (function () {
       mur: 0xc9c2b4, toit: 0x4a4d55,
       amplitude: 0, largeur: 150, pic: 1, densite: 0, limiteArbres: 1e9, rochers: 0, poussiere: 0x8a8a8a
     },
+    // (v85) Ville de jour (prologue) : même décor que « ville » (barrières, public, immeubles, rues) mais en plein jour, sans halos ni fenêtres allumées
+    villej: {
+      nom: "Ville de jour",
+      cielHaut: 0x5b93d6, cielHorizon: 0xcfe0ee, brume: 0xc9d6e2, fogProche: 140, fogLoin: 700, soleil: 0xfff3d6,
+      herbe1: 0x6b7f5a, herbe2: 0x5f7350, champ: 0x7d8a6a, champ2: 0x5f6b52, clair: 0x8a9078,
+      accotement: 0x9a958c, roche: 0x8a8a8a, neige: 0xffffff, sol: 0x6b6e72,
+      arbres: [0x4f7f3c, 0x5c8f46], conifere: false, villeN: true, ligne: "pointille",
+      mur: 0xd9d0bf, toit: 0x8a5a48,
+      amplitude: 0, largeur: 150, pic: 1, densite: 0, limiteArbres: 1e9, rochers: 0, poussiere: 0x9a9a9a
+    },
     montagne: {
       nom: "Montagne",
       cielHaut: 0x2f78cf, cielHorizon: 0xdbe9f4, brume: 0xdbe9f4, fogProche: 150, fogLoin: 700, soleil: 0xfff4e0,
@@ -1260,7 +1270,7 @@ const Monde3D = (function () {
     gainBoucle = a - route.alt0;
     GEO = route.geo || null;
     if (GEO) { LB = route.boucle ? route.longueur : 0; gainBoucle = 0; preparerGeo(); }
-    else { LB = route.boucle && route.longueur >= 4000 ? route.longueur : 0; construireChemin(); }
+    else { LB = route.boucle && (route.longueur >= 4000 || route.virages) ? route.longueur : 0; construireChemin(); }   // (v79) une petite boucle à virages (critérium, 3 km) se referme aussi : avant, dès le 2e tour la route devenait une droite infinie sans immeubles
     reelAFaire = true;
     return true;
   }
@@ -2374,6 +2384,7 @@ const Monde3D = (function () {
     const k = coul || { peau: matPeau.color, maillot: matMaillot.color, bas: matBas.color, chaussette: matBlanc.color, cheveux: matCheveux.color };
     const u = { uPeau: { value: k.peau }, uMaillot: { value: k.maillot }, uCuissard: { value: k.bas }, uGant: { value: gant.color },
       uChaussette: { value: k.chaussette }, uLong: { value: 0 },
+      uMaillot2: { value: new T.Color(0xffffff) }, uMaillot3: { value: new T.Color(0xffffff) }, uMotif: { value: 0 }, uKitDy: { value: 0 }, uKitSx: { value: 1 },   // (v87) maillots d'équipe : couleur 2, couleur 3 et motif
       uCheveux: { value: k.cheveux }, uSourcils: { value: new T.Color(0x2a1d14) }, uLevres: { value: new T.Color(0xb36a5e) },
       uEpCh: { value: 0.007 }, uFinS: { value: 0 }, uRecul: { value: 0 }, uNuque: { value: 0 }, uRase: { value: 0 }, uBarbe: { value: 0 }, uSansTete: { value: 0 },
       uTexPeau: { value: texC("peauH") }, uTexOmbre: { value: texC("ombreH") } };
@@ -2397,14 +2408,27 @@ const Monde3D = (function () {
           "  transformed += objectNormal * (mch * uEpCh + mb);");
       sh.fragmentShader = "uniform vec3 uPeau, uMaillot, uCuissard, uGant, uChaussette, uCheveux, uSourcils, uLevres;\nuniform float uLong, uSansTete, uFinS;\nuniform sampler2D uTexPeau, uTexOmbre;\nvarying vec4 vZone, vVisage, vChev;\nvarying float vJambe;\nvarying vec3 vBind;\nvarying vec2 vUvC;\n" + commun +
         "float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }\n" +
+        // (v87) maillots d'équipe : motifs dessinés d'après la position du sommet dans la pose de repos (x : de côté, les manches sont à |x| > 0,17 ; y : hauteur, bas du maillot sous 1,11)
+        "uniform vec3 uMaillot2, uMaillot3;\nuniform float uMotif, uKitDy, uKitSx;\n" +
+        "vec3 kitMaillot() {\n" +
+        "  float ax = abs(vBind.x) * uKitSx, y = vBind.y + uKitDy, m = uMotif;\n  vec3 c = uMaillot;\n" +
+        "  if (m < 1.5) c = ax > 0.17 ? uMaillot2 : uMaillot;\n" +                                                   // 1 : manches
+        "  else if (m < 2.5) c = vBind.x * uKitSx < -0.17 ? uMaillot2 : uMaillot;\n" +                                         // 2 : une seule manche
+        "  else if (m < 3.5) c = y < 1.11 ? uMaillot2 : uMaillot;\n" +                                                // 3 : bas du maillot
+        "  else if (m < 4.5) c = ax < 0.05 ? uMaillot2 : uMaillot;\n" +                                               // 4 : bande centrale
+        "  else if (m < 5.5) c = mix(uMaillot, uMaillot2, smoothstep(1.46, 1.05, y));\n" +                            // 5 : dégradé du haut vers le bas
+        "  else if (m < 6.5) { c = (y > 1.24 && y < 1.34 && ax < 0.17) ? uMaillot2 : uMaillot; }\n" +                  // 6 : bande à la poitrine
+        "  else if (m < 7.5) { c = ax > 0.17 ? uMaillot2 : uMaillot; if (y < 1.11 && ax <= 0.17) c = uMaillot3; }\n" + // 7 : manches et bas
+        "  else { float f = 1.08 + 0.05 * abs(sin(vBind.x * 38.0)); c = y < f ? uMaillot2 : uMaillot; if (ax > 0.17) c = uMaillot3; }\n" +   // 8 : flammes en bas, manches couleur 3
+        "  return c;\n}\n" +
         // vue action cam : ni la tête, ni ce qui frôle la caméra (épaules, cou : ils formaient des triangles coupés devant l'objectif)
         sh.fragmentShader.replace("vec4 diffuseColor = vec4( diffuse, opacity );",
-          "if (uSansTete > 0.5 && (vJambe > 1.5 || length(vViewPosition) < 0.2)) discard;\n  vec3 cz = uPeau;\n  float nu = 1.0;\n  if (vJambe > 0.5 && vJambe < 1.5 && uLong > 0.5) { cz = uCuissard; nu = 0.0; }\n  if (vZone.x > 0.0) { cz = uMaillot; nu = 0.0; }\n  if (vZone.y > 0.0) { cz = uCuissard; nu = 0.0; }\n" +
+          "if (uSansTete > 0.5 && (vJambe > 1.5 || length(vViewPosition) < 0.2)) discard;\n  vec3 cz = uPeau;\n  float nu = 1.0;\n  if (vJambe > 0.5 && vJambe < 1.5 && uLong > 0.5) { cz = uCuissard; nu = 0.0; }\n  if (vZone.x > 0.0) { cz = uMotif > 0.5 ? kitMaillot() : uMaillot; nu = 0.0; }\n  if (vZone.y > 0.0) { cz = uCuissard; nu = 0.0; }\n" +
           "  if (vZone.z > 0.0) { cz = uLong > 0.5 ? uCuissard : uChaussette; nu = 0.0; }\n  if (vZone.w > 0.0) { cz = uGant; nu = 0.0; }\n" +
           // finitions : fermeture éclair du maillot, bandes au col, aux manches, au bas du cuissard et en haut des chaussettes
           "  if (vZone.x > 0.0 && vZone.y <= 0.0) {\n" +
           "    if (abs(vBind.x) < 0.0035 && vBind.z < -0.04 && vBind.y > 1.02) cz = vec3(0.16, 0.17, 0.19);\n" +
-          "    if (vZone.x < 0.009) cz = uMaillot * 0.6;\n" +
+          "    if (vZone.x < 0.009) cz = (uMotif > 0.5 ? kitMaillot() : uMaillot) * 0.6;\n" +
           "  }\n" +
           "  if (vZone.y > 0.0 && vZone.y < 0.022 && vZone.x <= 0.0 && vJambe > 0.5 && vBind.y < 0.8) cz = uCuissard * 0.65 + 0.06;\n" +
           "  if (vZone.z > 0.0 && vZone.z < 0.016 && uLong < 0.5) cz = uChaussette * 0.82;\n" +
@@ -2434,51 +2458,205 @@ const Monde3D = (function () {
     m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), d.normalize());
     return m;
   }
-  function construireAccessoiresH(matCasque) {
-    const lerpTab = (tab, a) => { let i = 1; while (i < tab.length - 1 && tab[i][0] < a) i++; const p = tab[i - 1], q = tab[i], f = Math.min(1, Math.max(0, (a - p[0]) / (q[0] - p[0]))); return p[1] + (q[1] - p[1]) * f; };
-    const sangleM = new T.MeshPhongMaterial({ color: 0x23262c, shininess: 20 });
-    // ----- casque : coque profilée (bord plus haut devant, plus bas derrière, petite queue), aérations, liseré intérieur sombre
-    const casqueH = new T.Group();
-    const NT = 72, NU = 22, cy = 0.02, rx = 0.098, ry = 0.098, rzF = 0.128, rzB = 0.136;
-    const BORD = [[0, 0.05], [0.6, 0.045], [1.1, 0.02], [1.6, 0.012], [2.2, -0.01], [Math.PI, -0.03]];
-    const AERATIONS = [[0, 0.07], [0.33, 0.06], [-0.33, 0.06], [0.64, 0.055], [-0.64, 0.055], [0.98, 0.05], [-0.98, 0.05], [2.75, 0.07], [-2.75, 0.07], [Math.PI, 0.08]];
-    const pos = [], col = [], idx = [];
-    const pt = (th, u, rentre) => {
-      const sr = Math.acos(Math.max(-1, Math.min(1, (lerpTab(BORD, Math.abs(th)) - cy) / ry))), s = u * sr;
-      const c = Math.cos(th), rz = c > 0 ? rzF : rzB * (1 + 0.2 * Math.pow(-c, 4));
-      const k = 1 - rentre;
-      return [rx * Math.sin(s) * Math.sin(th) * k, cy + ry * Math.cos(s) * k, -rz * Math.sin(s) * c * k];
-    };
-    const evente = (th, u) => {                  // aérations : fentes d'avant en arrière
-      for (const [a, w] of AERATIONS) {
+  /* ---------- (v76) Modèles de casque : classique, aéro, lisse, ventilé, contre-la-montre ----------
+     Chaque modèle est une coque en maillage dans le repère de corps.tete. Les aérations, panneaux teintés et bandes sont peints par sommet
+     (gris multiplié par la couleur du casque) et les aérations sont un peu creusées. Le modèle « chrono » est une goutte allongée (queue
+     tombante) avec une visière. Les géométries sont partagées (cache) entre l'avatar, les amis et les coureurs IA. */
+  const STYLES_CASQUE = ["classique", "aero", "evade", "ventile", "chrono"];
+  const BORD_STD = [[0, 0.05], [0.6, 0.045], [1.1, 0.02], [1.6, 0.012], [2.2, -0.01], [Math.PI, -0.03]];
+  const PARAM_CASQUE = {
+    classique: { rx: 0.098, ry: 0.098, rzF: 0.126, rzB: 0.12, cy: 0.02, queue: 0.07, bord: BORD_STD, bande: 2, items: null },
+    aero: { rx: 0.101, ry: 0.1, rzF: 0.124, rzB: 0.118, cy: 0.02, queue: 0.1, bord: [[0, 0.044], [0.6, 0.04], [1.1, 0.012], [1.6, -0.006], [2.2, -0.025], [Math.PI, -0.045]], bande: 0.8,
+      items: [
+        { p: "s", c: [-0.005, 0.058], h: [0.064, 0.037], r: 0.02, k: "tint" },
+        { p: "s", c: [-0.005, 0.058], h: [0.054, 0.027], r: 0.016, k: "mesh" },
+        { p: "s", c: [-0.07, 0.03], h: [0.012, 0.012], r: 0.006, k: "dark" },
+        { p: "t", c: [0.034, -0.078], h: [0.012, 0.03], r: 0.008, k: "dark" },
+        { p: "t", c: [0.066, -0.01], h: [0.011, 0.05], r: 0.008, k: "dark" },
+        { p: "t", c: [0, 0.1], h: [0.03, 0.02], r: 0.01, k: "dark" }] },
+    evade: { rx: 0.097, ry: 0.097, rzF: 0.126, rzB: 0.12, cy: 0.02, queue: 0.2, bord: [[0, 0.05], [0.6, 0.044], [1.1, 0.014], [1.6, -0.004], [2.2, -0.03], [Math.PI, -0.05]], bande: 0.88,
+      items: [
+        { p: "s", c: [0.01, 0.022], h: [0.13, 0.025], r: 0.012, k: "tint" },
+        { p: "s", c: [0.01, 0.047], h: [0.12, 0.0035], r: 0.0035, k: "groove" },
+        { p: "s", c: [0.07, 0.07], h: [0.014, 0.02], r: 0.007, k: "dark" },
+        { p: "s", c: [0.108, 0.062], h: [0.012, 0.018], r: 0.006, k: "dark" },
+        { p: "s", c: [-0.07, 0.025], h: [0.018, 0.009], r: 0.004, k: "dark" },
+        { p: "t", c: [0.046, -0.07], h: [0.012, 0.03], r: 0.008, k: "dark" },
+        { p: "t", c: [0.05, 0.035], h: [0.012, 0.032], r: 0.008, k: "dark" },
+        { p: "t", c: [0, 0.0], h: [0.026, 0.009], r: 0.003, k: "mesh" }] },
+    ventile: { rx: 0.099, ry: 0.1, rzF: 0.125, rzB: 0.12, cy: 0.02, queue: 0.07, bord: [[0, 0.048], [0.6, 0.043], [1.1, 0.016], [1.6, 0.0], [2.2, -0.02], [Math.PI, -0.038]], bande: 0.9,
+      items: [
+        { p: "t", c: [0, 0.01], h: [0.011, 0.2], r: 0.005, k: "solid" },
+        { p: "t", c: [0.03, -0.045], h: [0.008, 0.045], r: 0.006, k: "dark" },
+        { p: "t", c: [0.054, -0.005], h: [0.008, 0.05], r: 0.006, k: "dark" },
+        { p: "t", c: [0.076, 0.035], h: [0.008, 0.045], r: 0.006, k: "dark" },
+        { p: "s", c: [-0.01, 0.052], h: [0.046, 0.026], r: 0.012, k: "tint" },
+        { p: "s", c: [-0.01, 0.052], h: [0.038, 0.019], r: 0.01, k: "dark" },
+        { p: "s", c: [0.085, 0.045], h: [0.02, 0.014], r: 0.007, k: "dark" },
+        { p: "t", c: [0, 0.11], h: [0.03, 0.016], r: 0.008, k: "dark" }] }
+  };
+  const geosCasque = {};
+  function geoCasque(style) {
+    if (!STYLES_CASQUE.includes(style)) style = "classique";
+    if (!geosCasque[style]) geosCasque[style] = style === "chrono" ? geoCasqueChrono() : geoCasqueCoque(style);
+    return geosCasque[style];
+  }
+  function lisseC(a, b, x) { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+  // texture en niveaux de gris (multipliée par la couleur du casque) : bords nets des aérations, quel que soit le nombre de sommets
+  function texCasque(W, H, f) {
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const cx = cv.getContext("2d"), im = cx.createImageData(W, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const v = Math.max(0, Math.min(1, f((x + 0.5) / W, (y + 0.5) / H))) * 255, k = (y * W + x) * 4;
+      im.data[k] = im.data[k + 1] = im.data[k + 2] = v; im.data[k + 3] = 255;
+    }
+    cx.putImageData(im, 0, 0);
+    const t = new T.CanvasTexture(cv); t.wrapS = t.wrapT = T.ClampToEdgeWrapping; t.anisotropy = 4;
+    return t;
+  }
+  const sdfRect = (u, v, it) => {
+    const qx = Math.abs(u - it.c[0]) - it.h[0] + it.r, qy = Math.abs(v - it.c[1]) - it.h[1] + it.r;
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - it.r;
+  };
+  // applique un élément (aération, panneau, rainure) au gris g ; d = distance signée au bord (négative dedans), (px, py) = position en m
+  function peindre(g, it, d, gate, px, py) {
+    const m = gate * (1 - lisseC(-0.0005, 0.0005, d));
+    if (m <= 0) return g;
+    let cible;
+    if (it.k === "tint") return g * (1 - 0.22 * m);
+    if (it.k === "groove") cible = 0.5;
+    else if (it.k === "solid") cible = 0.08;
+    else if (it.k === "mesh") cible = 0.14 + 0.12 * ((Math.sin(px * 1050) * Math.sin(py * 1050 + 1.3) > 0) ? 1 : 0) + 0.2 * lisseC(-0.004, 0, d);
+    else cible = 0.05 + 0.25 * lisseC(-0.008, 0, d);       // aération : fond noir, bord intérieur un peu plus clair (profondeur)
+    return g + (cible - g) * m;
+  }
+  function geoCasqueCoque(style) {
+    const P = PARAM_CASQUE[style], NT = 96, NU = 30, pos = [], col = [], uv = [], idx = [];
+    const AER = [[0, 0.07], [0.33, 0.06], [-0.33, 0.06], [0.64, 0.055], [-0.64, 0.055], [0.98, 0.05], [-0.98, 0.05], [2.75, 0.07], [-2.75, 0.07], [Math.PI, 0.08]];
+    const evente = (th, u) => {                  // modèle classique : fentes d'avant en arrière
+      for (const [a, w] of AER) {
         let d = Math.abs(th - a); if (d > Math.PI) d = 2 * Math.PI - d;
-        const avant = Math.abs(a) < 2;
-        if (d < w * 0.5 && (avant ? u > 0.2 && u < 0.66 : u > 0.38 && u < 0.8)) return true;
+        if (d < w * 0.5 && (Math.abs(a) < 2 ? u > 0.2 && u < 0.66 : u > 0.38 && u < 0.8)) return true;
       }
       return false;
     };
-    const C = new T.Color();
-    for (let i = 0; i < NT; i++) for (let j = 0; j <= NU; j++) {
-      const th = -Math.PI + 2 * Math.PI * i / NT, u = j / NU, v = evente(th, u);
-      pos.push(...pt(th, u, v ? 0.07 : 0));
-      C.set(v ? 0x17191d : 0xffffff); col.push(C.r, C.g, C.b);
+    const pt = (th, u, rentre) => {
+      const sr = Math.acos(Math.max(-1, Math.min(1, (lerpT(P.bord, Math.abs(th)) - P.cy) / P.ry))), s = u * sr;
+      const c = Math.cos(th), rz = c > 0 ? P.rzF : P.rzB * (1 + P.queue * Math.pow(-c, 4)), k = 1 - rentre;
+      return [P.rx * Math.sin(s) * Math.sin(th) * k, P.cy + P.ry * Math.cos(s) * k, -rz * Math.sin(s) * c * k];
+    };
+    const tex = texCasque(768, 384, (fx, fy) => {
+      const th = -Math.PI + 2 * Math.PI * fx;
+      let g = 1;
+      if (!P.items) {
+        // classique : fentes comme avant, bords adoucis en lissant l'indicateur sur quelques points voisins
+        let n = 0; for (let k = -1; k <= 1; k++) if (evente(th + k * 0.012, fy)) n++;
+        g = 1 - 0.91 * n / 3;
+      } else {
+        const p = pt(th, fy, 0), ny = (p[1] - P.cy) / P.ry, nx = Math.abs(p[0]) / P.rx;
+        for (const it of P.items) {
+          const top = it.p === "t", gate = top ? lisseC(0.3, 0.5, ny) : lisseC(0.5, 0.68, nx);
+          if (gate <= 0) continue;
+          const px = top ? Math.abs(p[0]) : p[2], py = top ? p[2] : p[1];
+          g = peindre(g, it, sdfRect(px, py, it), gate, px, py);
+        }
+        g += (0.1 - g) * lisseC(P.bande, P.bande + 0.04, fy);     // liseré sombre du bord bas
+      }
+      return g;
+    });
+    for (let i = 0; i <= NT; i++) for (let j = 0; j <= NU; j++) {
+      const th = -Math.PI + 2 * Math.PI * i / NT, u = j / NU;
+      pos.push(...pt(th, u, 0)); col.push(1, 1, 1); uv.push(i / NT, 1 - u);
     }
     const base = pos.length / 3;                   // bord épais : retour vers l'intérieur, sombre
-    for (let i = 0; i < NT; i++) for (const r of [0.0, 0.13]) {
+    const C = new T.Color();
+    for (let i = 0; i <= NT; i++) for (const r of [0.0, 0.13]) {
       const th = -Math.PI + 2 * Math.PI * i / NT, p = pt(th, 1, r), q = pt(th, 0.86, 0.13);
-      pos.push(...(r ? q : p)); C.set(r ? 0x101114 : 0x2a2d33); col.push(C.r, C.g, C.b);
+      pos.push(...(r ? q : p)); C.set(r ? 0x101114 : 0x2a2d33); col.push(C.r, C.g, C.b); uv.push(i / NT, 0.99);
     }
     for (let i = 0; i < NT; i++) {
-      const i2 = (i + 1) % NT;
-      for (let j = 0; j < NU; j++) { const a = i * (NU + 1) + j, b = i2 * (NU + 1) + j; idx.push(a, a + 1, b, b, a + 1, b + 1); }
-      const a = base + i * 2, b = base + i2 * 2;
+      for (let j = 0; j < NU; j++) { const a = i * (NU + 1) + j, b = (i + 1) * (NU + 1) + j; idx.push(a, a + 1, b, b, a + 1, b + 1); }
+      const a = base + i * 2, b = a + 2;
       idx.push(a, b, a + 1, b, b + 1, a + 1);
     }
     const g = new T.BufferGeometry();
-    g.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new T.Float32BufferAttribute(col, 3));
+    g.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new T.Float32BufferAttribute(col, 3)); g.setAttribute("uv", new T.Float32BufferAttribute(uv, 2));
     g.setIndex(idx); g.computeVertexNormals();
-    const coque = new T.Mesh(g, new T.MeshPhongMaterial({ color: matCasque.color, vertexColors: true, shininess: 90, specular: 0x5a5a5a, side: T.DoubleSide }));
+    const nr = g.attributes.normal, S = NU + 1;       // raccord de la couture (derrière) : même normale des deux côtés
+    for (let j = 0; j <= NU; j++) { const a = j, b = NT * S + j; const x = nr.getX(a) + nr.getX(b), y = nr.getY(a) + nr.getY(b), z = nr.getZ(a) + nr.getZ(b), l = Math.hypot(x, y, z) || 1; nr.setXYZ(a, x / l, y / l, z / l); nr.setXYZ(b, x / l, y / l, z / l); }
+    g.userData.tex = tex;
+    const pd = pt(Math.PI, 0.78, 0), nd = new T.Vector3(pd[0] / (P.rx * P.rx), (pd[1] - P.cy) / (P.ry * P.ry), pd[2] / (P.rzB * P.rzB * (1 + P.queue) * (1 + P.queue))).normalize();
+    g.userData.dial = { p: [pd[0] + nd.x * 0.004, pd[1] + nd.y * 0.004, pd[2] + nd.z * 0.004], n: [nd.x, nd.y, nd.z] };
+    return g;
+  }
+  // casque de contre-la-montre : goutte allongée, queue qui tombe vers le dos (sections elliptiques le long de z)
+  function geoCasqueChrono() {
+    const NS = 72, NA = 32, zF = -0.138, zT = 0.225, HW = 0.1, HH = 0.132, pos = [], uv = [], idx = [];
+    const forme = (t) => {                       // t : 0 nez, 1 bout de la queue ; haut plein jusqu'à t = 0,5 (il faut couvrir tout le crâne), puis la queue s'effile
+      const nez = Math.min(1, t / 0.22), queue = Math.max(0, (t - 0.5) / 0.5);
+      const prof = t < 0.22 ? Math.pow(Math.sin(Math.PI / 2 * nez), 0.4) : Math.pow(Math.max(0, 1 - Math.pow(queue, 1.35)), 0.85);
+      const hw = Math.max(0.006, HW * (t < 0.22 ? prof : Math.pow(Math.max(0, 1 - Math.pow(queue, 1.2)), 0.7)));
+      const rim = 0.012 - 0.12 * Math.pow(t, 1.3);
+      return { hw, rim, h: Math.max(0.01, HH * prof) };
+    };
+    const ITEMS = [{ c: [0, 0.07], h: [0.009, 0.02], r: 0.006, k: "dark" }, { c: [0.028, -0.085], h: [0.008, 0.018], r: 0.006, k: "dark" }, { c: [0.0, 0.2], h: [0.006, 0.02], r: 0.003, k: "mesh" }];
+    const tex = texCasque(384, 768, (fx, fy) => {
+      const sn = Math.sin(-Math.PI / 2 + Math.PI * fx), t = fy, f = forme(t), x = Math.abs(f.hw * sn), z = zF + (zT - zF) * t;
+      let g = 1;
+      g *= 1 - 0.28 * lisseC(0.55, 0.62, Math.abs(sn)) * (1 - lisseC(0.88, 0.95, Math.abs(sn))) * lisseC(0.05, 0.1, t) * (1 - lisseC(0.72, 0.8, t));   // ruban latéral plus sombre
+      for (const it of ITEMS) g = peindre(g, it, sdfRect(x, z, it), lisseC(0.3, 0.5, Math.pow(1 - Math.abs(sn), 0.7)), x, z);
+      return g;
+    });
+    for (let i = 0; i <= NS; i++) {
+      const t = i / NS, f = forme(t), z = zF + (zT - zF) * t;
+      for (let j = 0; j <= NA; j++) {
+        const s = -Math.PI / 2 + Math.PI * j / NA, sn = Math.sin(s);
+        pos.push(f.hw * sn, f.rim + f.h * Math.pow(Math.cos(s), 0.72), z); uv.push(j / NA, t);
+      }
+    }
+    const NJ = NA + 1, col = new Array(pos.length).fill(1);
+    for (let i = 0; i < NS; i++) for (let j = 0; j < NA; j++) { const a = i * NJ + j, b = a + NJ; idx.push(a, a + 1, b, b, a + 1, b + 1); }
+    const base = pos.length / 3;                 // dessous plat sombre
+    for (let i = 0; i <= NS; i++) for (const j of [0, NA]) { const k = (i * NJ + j) * 3; pos.push(pos[k], pos[k + 1] - 0.002, pos[k + 2]); col.push(0.05, 0.05, 0.05); uv.push(0.5, i / NS); }
+    for (let i = 0; i < NS; i++) { const a = base + i * 2, b = a + 2; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+    const g = new T.BufferGeometry();
+    g.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new T.Float32BufferAttribute(col, 3)); g.setAttribute("uv", new T.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    g.userData.tex = tex;
+    return g;
+  }
+  function geoVisiere() {                        // visière du casque de chrono : écran sombre qui enveloppe le visage
+    const NP = 30, p = [], ix = [];
+    for (let i = 0; i <= NP; i++) {
+      const ph = -1.2 + 2.4 * i / NP, x = 0.096 * Math.sin(ph), z = -0.04 - 0.104 * Math.cos(ph);
+      const yt = 0.045 - 0.012 * ph * ph, yb = -0.056 + 0.014 * ph * ph;
+      p.push(x, yt, z, x, yb, z - 0.016);
+    }
+    for (let i = 0; i < NP; i++) { const a = i * 2, b = a + 2; ix.push(a, a + 1, b, b, a + 1, b + 1); }
+    const g = new T.BufferGeometry();
+    g.setAttribute("position", new T.Float32BufferAttribute(p, 3)); g.setIndex(ix); g.computeVertexNormals();
+    return g;
+  }
+  function appliquerStyleCasque(grp, style) {    // change la forme d'un casque déjà construit (avatar, ami ou coureur IA)
+    const s = STYLES_CASQUE.includes(style) ? style : "classique";
+    const co = grp.getObjectByName("coque"), vi = grp.getObjectByName("visiere"), mo = grp.getObjectByName("molette");
+    const g = geoCasque(s);
+    if (co) { co.geometry = g; co.material.map = g.userData.tex; co.material.bumpMap = g.userData.tex; co.material.needsUpdate = true; }
+    if (vi) vi.visible = s === "chrono";
+    if (mo) { const d = g.userData.dial; mo.visible = !!d; if (d) { mo.position.fromArray(d.p); mo.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), new T.Vector3().fromArray(d.n)); } }   // molette posée sur la coque, derrière
+    return s;
+  }
+  function construireAccessoiresH(matCasque) {
+    const sangleM = new T.MeshPhongMaterial({ color: 0x23262c, shininess: 20 });
+    // ----- casque : forme choisie dans STYLES_CASQUE (classique au départ), visière cachée sauf pour le modèle de chrono
+    const casqueH = new T.Group();
+    const C = new T.Color();
+    const coque = new T.Mesh(geoCasque("classique"), new T.MeshPhongMaterial({ color: matCasque.color, map: geoCasque("classique").userData.tex, bumpMap: geoCasque("classique").userData.tex, bumpScale: 1.6, vertexColors: true, shininess: 48, specular: 0x262626, side: T.DoubleSide }));
+    coque.name = "coque";
     casqueH.add(coque);
+    const visiere = new T.Mesh(geoVisiere(), new T.MeshPhongMaterial({ color: 0x1b2230, shininess: 160, specular: 0xaab8c8, transparent: true, opacity: 0.8, side: T.DoubleSide }));
+    visiere.name = "visiere"; visiere.visible = false;
+    casqueH.add(visiere);
     corps.matCasqueH = coque.material;
     // sangles : devant et derrière l'oreille, réunies sous l'oreille, puis sous le menton ; molette de serrage derrière
     for (const sg of [-1, 1]) {
@@ -2488,7 +2666,7 @@ const Monde3D = (function () {
       const pince = new T.Mesh(new T.BoxGeometry(0.008, 0.012, 0.006), sangleM); pince.position.set(B[0], B[1], B[2]); casqueH.add(pince);
     }
     const boucle = new T.Mesh(new T.BoxGeometry(0.026, 0.008, 0.012), sangleM); boucle.position.set(0, -0.116, -0.06); casqueH.add(boucle);
-    const molette = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 0.01, 12).rotateX(Math.PI / 2), sangleM); molette.position.set(0, -0.04, 0.105); casqueH.add(molette);
+    const molette = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 0.01, 12).rotateX(Math.PI / 2), sangleM); molette.position.set(0, -0.04, 0.105); molette.name = "molette"; casqueH.add(molette);
     casqueH.visible = false;
     corps.tete.add(casqueH);
     corps.casqueH = casqueH;
@@ -2926,7 +3104,7 @@ const Monde3D = (function () {
   let ia = [];
   const _pi = [0, 0];
   function creerEtiquette(nom, couleur) {
-    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 72;
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 96;     // (v93) 24 px de plus en bas pour la jauge de réserve
     const x = cv.getContext('2d');
     x.fillStyle = 'rgba(255,255,255,.92)'; x.beginPath();
     if (x.roundRect) x.roundRect(4, 8, 248, 56, 28); else x.rect(4, 8, 248, 56);
@@ -2937,9 +3115,29 @@ const Monde3D = (function () {
     x.font = 'bold 34px sans-serif';
     while (taille > 20 && x.measureText(nom).width > 178) { taille -= 2; x.font = 'bold ' + taille + 'px sans-serif'; }
     x.fillStyle = '#1b2430'; x.textBaseline = 'middle'; x.fillText(nom, 66, 38);
+    const base = x.getImageData(0, 0, 256, 96);
     const tex = new T.CanvasTexture(cv);
     const sp = new T.Sprite(new T.SpriteMaterial({ map: tex, transparent: true, opacity: 0.7, depthWrite: false }));
-    sp.scale.set(1.0, 0.28, 1);
+    sp.scale.set(1.0, 0.375, 1);
+    // (v93) jauge de réserve anaérobie sous le nom : verte pleine, orange puis rouge quand elle se vide (f de 0 à 1) ; redessinée seulement si elle change de 2 %
+    sp.userData.jauge = (f, vide) => {
+      if (f === null || f === undefined) return;
+      const cle = Math.round(f * 50) + (vide ? 100 : 0);
+      if (sp.userData.cle === cle) return;
+      sp.userData.cle = cle;
+      x.putImageData(base, 0, 0);
+      x.fillStyle = 'rgba(20,30,40,.75)'; x.beginPath();
+      if (x.roundRect) x.roundRect(30, 70, 196, 18, 9); else x.rect(30, 70, 196, 18);
+      x.fill();
+      const w = Math.max(0, Math.min(1, f)) * 188;
+      if (w > 1) {
+        x.fillStyle = vide ? '#d93636' : f > 0.6 ? '#3fcf6b' : f > 0.3 ? '#f2a23a' : '#e8453c';
+        x.beginPath();
+        if (x.roundRect) x.roundRect(34, 74, w, 10, 5); else x.rect(34, 74, w, 10);
+        x.fill();
+      }
+      tex.needsUpdate = true;
+    };
     return sp;
   }
   function creerCoureurIA(couleur, ampleur, nom, fantome, perso) {
@@ -3042,7 +3240,7 @@ const Monde3D = (function () {
     return { genre: femme ? "femme" : "homme", peau: pick(PEAUX_IA), cheveux: pick(CHEVEUX_IA),
       coupe: femme ? pick(["chignon", "queue", "court"]) : pick(["court", "court", "rase", "degarni"]),
       barbe: femme ? "aucune" : pick(["aucune", "aucune", "courte", "bouc", "moustache", "complete"]),
-      casque: pick([0xf2f4f6, 0xf2f4f6, 0x1b1d22, 0x2b2f3a, couleur]), verres: pick(Object.keys(VERRES)) };
+      casque: pick([0xf2f4f6, 0xf2f4f6, 0x1b1d22, 0x2b2f3a, couleur]), casqueStyle: pick(["classique", "aero", "aero", "evade", "ventile"]), verres: pick(Object.keys(VERRES)) };
   }
   function creerCorpsReelIA(c, couleur, P) {
     const mh = corps.modeleH, g = P.genre === "femme" && ModeleF ? "femme" : "homme", M = g === "femme" ? ModeleF : ModeleH, src = mh.geo, nv = src.attributes.position.count;
@@ -3055,9 +3253,10 @@ const Monde3D = (function () {
     geo.setIndex(src.index);
     for (const gr of src.groups) geo.addGroup(gr.start, gr.count, gr.materialIndex);
     geo.boundingSphere = new T.Sphere(new T.Vector3(0, 0.9, 0), 1.3);       // corps toujours autour du vélo : la caméra peut l'ignorer hors champ
-    const C = (x) => new T.Color(x), coul = { peau: C(P.peau), maillot: C(couleur), bas: C(0x1c1f26), chaussette: C(0xf2f4f6), cheveux: C(P.cheveux) };
+    const C = (x) => new T.Color(x), coul = { peau: C(P.peau), maillot: C(couleur), bas: C(P.kit && P.kit.bas !== undefined ? P.kit.bas : 0x1c1f26), chaussette: C(0xf2f4f6), cheveux: C(P.cheveux) };
     const matCorps = matTenue(mh.mats[3], coul), u = matCorps.userData.u, cp = COUPES[P.coupe] || COUPES.court, f = g === "femme";
     u.uTexPeau.value = texC(f ? "peauF" : "peauH"); u.uTexOmbre.value = texC(f ? "ombreF" : "ombreH");
+    if (P.kit) { u.uMaillot2.value.set(P.kit.c2 !== undefined ? P.kit.c2 : 0xffffff); u.uMaillot3.value.set(P.kit.c3 !== undefined ? P.kit.c3 : (P.kit.c2 !== undefined ? P.kit.c2 : 0xffffff)); u.uMotif.value = P.kit.motif || 0; u.uKitDy.value = f ? 0.11 : 0; u.uKitSx.value = f ? 1.09 : 1; }   // (v87) ; (v89) corps de femme : plus court (0,92 à 1,36) et plus étroit que celui de l'homme (1,03 à 1,48) : seuils décalés
     u.uEpCh.value = P.casque === null ? cp.ep : Math.min(cp.ep, 0.002); u.uRecul.value = cp.recul; u.uNuque.value = cp.nuque; u.uRase.value = cp.rase || 0;   // toujours casqué
     u.uBarbe.value = BARBES[P.barbe] || 0; u.uFinS.value = f ? 0.0006 : 0;
     u.uSourcils.value.set(P.cheveux).multiplyScalar(f ? 0.85 : 0.75);
@@ -3076,13 +3275,13 @@ const Monde3D = (function () {
     const tete = new T.Group();
     if (corps.casqueH) {
       const ca = corps.casqueH.clone(); ca.visible = true;
-      const coque = ca.children[0]; coque.material = coque.material.clone(); coque.material.color = C(P.casque);
+      const coque = ca.children[0]; coque.material = coque.material.clone(); coque.material.color = C(P.casque); appliquerStyleCasque(ca, P.casqueStyle);
       const lu = corps.lunettesH.clone(); lu.visible = true;
       const verre = lu.children[0], gl = verre.geometry.clone(), v = VERRES[P.verres] || VERRES.orange, a = C(v[0]), b = C(v[1]), col = gl.attributes.color, n = corps.verresH.nv;
       for (let i = 0; i < col.count; i++) { const cc = a.clone().lerp(b, (i % (n + 1)) / n); col.setXYZ(i, cc.r, cc.g, cc.b); }
       verre.geometry = gl;
       ca.visible = P.casque !== null && P.casque !== undefined;   // (v72) un ami sans casque ni lunettes (sortie de groupe) ; les coureurs IA en ont toujours
-      lu.visible = P.lunettes !== false;
+      lu.visible = P.lunettes !== false && P.casqueStyle !== "chrono";
       tete.add(ca, lu);
     }
     tete.traverse((o) => { if (o.isMesh) o.castShadow = true; });
@@ -3212,6 +3411,88 @@ const Monde3D = (function () {
     }
   }
 
+  /* ---------- (v86) Rampe de départ du contre-la-montre ----------
+     Plate-forme de 1,8 m de haut (16 m de long : la caméra, derrière toi, reste au-dessus), pente de 12 m jusqu'à la route, tableau du compte à rebours devant toi et assistant de départ qui tient
+     le vélo par la selle. Dimensions d'après les rampes vues dans les contre-la-montre professionnels (hauteur d'environ 1,5 à 2 m) : pas relevées dans un règlement.
+     Le cycliste est posé dessus tant que sa distance est dans la zone de la rampe (rampeH). */
+  const RAMPE_H = 1.8, RAMPE_S0 = -11, RAMPE_S1 = 5, RAMPE_S2 = 17;
+  let rampe3d = null;
+  function rampeH(d) {
+    if (!rampe3d || rampe3d.d0 === null) return 0;
+    const s = d - rampe3d.d0;
+    if (s < RAMPE_S0 || s > RAMPE_S2) return 0;
+    return s <= RAMPE_S1 ? RAMPE_H : RAMPE_H * (1 - (s - RAMPE_S1) / (RAMPE_S2 - RAMPE_S1));
+  }
+  function texCompte(txt) {
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256;
+    const x = cv.getContext('2d');
+    x.fillStyle = '#0b0e13'; x.fillRect(0, 0, 512, 256);
+    x.strokeStyle = '#ff7a2f'; x.lineWidth = 10; x.strokeRect(8, 8, 496, 240);
+    x.fillStyle = txt === 'GO' ? '#7bf28a' : '#ff4a3a'; x.font = 'bold ' + (txt.length > 2 ? 90 : 170) + 'px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(txt, 256, 138);
+    return cv;
+  }
+  function creerRampe3d() {
+    const g = new T.Group(), M = (c) => new T.MeshLambertMaterial({ color: c }), HX = 0.9, LAR = 3.4;
+    const bleu = M(0x1f3350), gris = M(0x4a5568), blanc = M(0xf4f6f8), rouge = M(0xe84a4a);
+    const bx = (w, h, l, x, y, z, m) => { const o = new T.Mesh(new T.BoxGeometry(w, h, l), m); o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
+    const L1 = RAMPE_S1 - RAMPE_S0, ZC = -(RAMPE_S0 + RAMPE_S1) / 2;
+    bx(LAR, RAMPE_H - 0.1, L1, HX, (RAMPE_H - 0.1) / 2, ZC, bleu);                 // caisse de la plate-forme
+    bx(LAR + 0.2, 0.12, L1 + 0.2, HX, RAMPE_H - 0.04, ZC, gris);                    // plancher
+    bx(LAR + 0.3, 0.2, 0.18, HX, RAMPE_H - 0.3, -(RAMPE_S1 + 0.1), blanc);         // liseré blanc devant
+    for (const sg of [-1, 1]) bx(0.1, 0.9, L1 + 0.2, HX + sg * (LAR / 2 + 0.05), RAMPE_H + 0.45, ZC, rouge);   // garde-corps rouges
+    const Ls = RAMPE_S2 - RAMPE_S1, al = Math.atan(RAMPE_H / Ls), lp = Math.hypot(Ls, RAMPE_H);
+    const pente = bx(LAR, 0.12, lp, HX, RAMPE_H / 2 - 0.06, -(RAMPE_S1 + RAMPE_S2) / 2, gris); pente.rotation.x = -al;   // la pente jusqu'à la route
+    for (const sg of [-1, 1]) {                                                       // flancs triangulaires
+      const x = HX + sg * LAR / 2, geo = new T.BufferGeometry();
+      geo.setAttribute('position', new T.BufferAttribute(new Float32Array([x, RAMPE_H - 0.1, -RAMPE_S1, x, 0, -RAMPE_S1, x, 0, -RAMPE_S2]), 3));
+      geo.computeVertexNormals();
+      const f = new T.Mesh(geo, new T.MeshLambertMaterial({ color: 0x1f3350, side: T.DoubleSide })); g.add(f);
+    }
+    // tableau du compte à rebours, au-dessus de la pente, face au cycliste
+    const sB = 9, mats = { cv: texCompte('PRÊT') };
+    mats.tex = new T.CanvasTexture(mats.cv);
+    const ecran = new T.Mesh(new T.PlaneGeometry(2.6, 1.3), new T.MeshBasicMaterial({ map: mats.tex }));
+    ecran.position.set(HX, RAMPE_H + 3.1, -sB); g.add(ecran);
+    for (const sg of [-1, 1]) bx(0.18, RAMPE_H + 3.8, 0.18, HX + sg * 2.1, (RAMPE_H + 3.8) / 2 - 0.5, -sB - 0.05, blanc);
+    bx(4.6, 0.2, 0.2, HX, RAMPE_H + 3.8, -sB - 0.05, blanc);
+    // assistant de départ : il tient la selle du vélo
+    const ass = new T.Group(), veste = M(0xe84a4a), pant = M(0x20252d), peau = M(0xd9a47c);
+    const ab = (w, h, l, x, y, z, m) => { const o = new T.Mesh(new T.BoxGeometry(w, h, l), m); o.position.set(x, y, z); ass.add(o); return o; };
+    ab(0.16, 0.85, 0.2, -0.12, 0.43, 0, pant); ab(0.16, 0.85, 0.2, 0.12, 0.43, 0, pant);
+    // debout à côté du vélo (à droite, au niveau de la selle), penché vers lui, le bras tendu vers la selle
+    const tr = ab(0.3, 0.62, 0.4, 0, 1.15, 0, veste); tr.rotation.z = 0.3;
+    const tete = new T.Mesh(new T.SphereGeometry(0.12, 10, 8), peau); tete.position.set(-0.2, 1.55, 0); ass.add(tete);
+    ab(0.7, 0.1, 0.1, -0.4, 1.05, 0.05, veste);
+    ass.position.set(HX + 0.85, RAMPE_H, 1.0); g.add(ass);
+    g.rotation.order = 'YXZ'; g.visible = false; scene.add(g);
+    rampe3d.g = g; rampe3d.mats = mats; rampe3d.ass = ass; rampe3d.pose = null;
+  }
+  function majRampe3d(d) {
+    if (!rampe3d || !rampe3d.g) return;
+    if (rampe3d.d0 !== null && !rampe3d.g && scene) { try { creerRampe3d(); rampe3d.ass.visible = true; } catch (err) { rampe3d.d0 = null; return; } }   // (v89) rampe demandée avant que la scène existe
+    const vis = rampe3d.d0 !== null && Math.abs(d - rampe3d.d0) < 250;
+    if (rampe3d.g.visible !== vis) rampe3d.g.visible = vis;
+    if (!vis || rampe3d.pose === rampe3d.d0) return;
+    rampe3d.pose = rampe3d.d0;
+    const d0 = rampe3d.d0;
+    posChemin(d0, _p);
+    rampe3d.g.position.set(_p[0], alt3d(d0), _p[1]);
+    rampe3d.g.rotation.set(Math.atan((alt3d(d0 + 10) - alt3d(d0 - 10)) / 20), -cap(d0), 0);
+  }
+  function definirRampe(d0) {
+    if (!rampe3d) rampe3d = { d0: null, g: null, mats: null, ass: null, pose: null };
+    rampe3d.d0 = d0 === null || d0 === undefined ? null : d0; rampe3d.pose = null;
+    if (rampe3d.d0 !== null && !rampe3d.g && scene) { try { creerRampe3d(); } catch (err) { rampe3d.d0 = null; } }
+    if (rampe3d.g) { rampe3d.ass.visible = rampe3d.d0 !== null; compteRampe(-1); }
+  }
+  function compteRampe(n) {     // n = secondes restantes ; 0 = parti ; -1 = « PRÊT »
+    if (!rampe3d || !rampe3d.mats) return;
+    const m = rampe3d.mats, txt = n < 0 ? 'PRÊT' : n === 0 ? 'GO' : String(n);
+    m.cv = texCompte(txt); m.tex.image = m.cv; m.tex.needsUpdate = true;
+    if (n === 0) rampe3d.ass.visible = false;
+  }
+
   /* (v69) hauteur du sol à l'écart u de l'axe de la route, à la distance d (mondes réels : le sol IGN, plus grossier, peut être plus bas ou plus haut que la route) */
   function solSous(d, u) {
     posChemin(d, _q);
@@ -3282,7 +3563,7 @@ const Monde3D = (function () {
   }
 // (v72) un coureur dont la définition n'a pas changé est gardé tel quel : l'arrivée ou le départ d'un ami (sortie de groupe)
 // ne reconstruit plus tous les corps réalistes d'un coup
-const cleIA = (o) => [o.couleur, o.ampleur || 1, o.nom, !!o.fantome, o.look, o.femme, o.id, o.perso ? JSON.stringify(o.perso) : ""].join("|");
+const cleIA = (o) => [o.couleur, o.ampleur || 1, o.nom, !!o.fantome, o.look, o.femme, o.id, o.perso ? JSON.stringify(o.perso) : "", o.kit ? JSON.stringify(o.kit) : ""].join("|");
 function definirPeloton(liste) {
   if (!scene) return;
   const libres = new Map();
@@ -3290,7 +3571,9 @@ function definirPeloton(liste) {
   ia = (liste || []).map((o) => {
     const k = cleIA(o), l = libres.get(k);
     if (l && l.length) return l.shift();
-    const c = creerCoureurIA(o.couleur, o.ampleur || 1, o.nom, o.fantome, o.perso || (o.look !== undefined ? persoAleatoire(o.look, o.femme, o.couleur) : PERSOS_IA[o.id]));
+    let perso = o.perso || (o.look !== undefined ? persoAleatoire(o.look, o.femme, o.couleur) : PERSOS_IA[o.id]);
+    if (o.kit && perso) perso = Object.assign({}, perso, { kit: o.kit });          // (v87) maillot d'équipe
+    const c = creerCoureurIA(o.couleur, o.ampleur || 1, o.nom, o.fantome, perso);
     c.cle = k; scene.add(c.g); return c;
   });
   for (const l of libres.values()) for (const c of l) scene.remove(c.g);
@@ -3320,7 +3603,7 @@ function definirPeloton(liste) {
       c.s += ((q.ratio > 1.08 && q.pente > 0.04 ? 1 : 0) - c.s) * (1 - Math.exp(-dt * 2));
       c.roueAv.rotation.x = -c.angRoue; c.roueAr.rotation.x = -c.angRoue;
       posChemin(dd, _pi);
-      const h = cap(dd), y = alt3d(dd), pt = Math.atan((alt3d(dd + 3) - alt3d(dd - 3)) / 6);
+      const h = cap(dd), y = alt3d(dd) + rampeH(dd), pt = Math.atan((alt3d(dd + 3) - alt3d(dd - 3) + rampeH(dd + 3) - rampeH(dd - 3)) / 6);   // (v87) les coéquipiers aussi sont sur la rampe
       c.g.position.set(_pi[0] + Math.cos(h) * c.voieA, y, _pi[1] + Math.sin(h) * c.voieA);
       c.g.rotation.set(pt, -h, q.cad > 0 ? Math.sin(c.angMan) * (0.012 + 0.09 * c.s) : 0);
       // un coureur collé à la caméra (entre elle et toi, par exemple sur la grille de départ) bouchait toute la vue : il est caché
@@ -3337,7 +3620,8 @@ function definirPeloton(liste) {
       if (c.etiq) {                       // l'étiquette grossit avec la distance pour rester lisible, et disparaît au loin
         const dist = Math.hypot(c.g.position.x - camera.position.x, c.g.position.y - camera.position.y, c.g.position.z - camera.position.z);
         const k = Math.min(4, Math.max(1, dist / 18));
-        c.etiq.scale.set(1.0 * k, 0.28 * k, 1); c.etiq.position.y = 2.2 + 0.1 * k + (k0 % 2) * 0.3 * k; c.etiq.renderOrder = 10 + k0;
+        c.etiq.scale.set(1.0 * k, 0.375 * k, 1); c.etiq.position.y = 2.2 + 0.1 * k + (k0 % 2) * 0.3 * k;
+        if (c.etiq.userData.jauge && q.reserve !== undefined) c.etiq.userData.jauge(q.reserve, q.vide); c.etiq.renderOrder = 10 + k0;
         c.etiq.visible = dist < 170 && dist > 1.5 && (q.d - e.distance > -6 || dist < 25);   // noms : seulement ceux qui sont devant toi ou tout près
       }
     }
@@ -3762,7 +4046,7 @@ function definirPeloton(liste) {
       corps.cheveux.visible = corps.nuque.visible = false;          // les cheveux sont dessinés sur le crâne du nouveau corps
     } else for (const c of corps.tete.children) if (c !== corps.lunettes && c !== corps.yeux[0] && c !== corps.yeux[1] && c !== corps.oreilles[0] && c !== corps.oreilles[1] && c !== corps.casqueH && c !== corps.lunettesH) c.visible = true;
     // nouveau corps : casque et lunettes dessinés pour sa tête (les anciens restent pour le modèle femme)
-    if (corps.casqueH) { corps.casqueH.visible = H && h && c; corps.lunettesH.visible = H && h && a.lunettes; }
+    if (corps.casqueH) { corps.casqueH.visible = H && h && c; corps.lunettesH.visible = H && h && a.lunettes && !(c && a.casqueStyle === "chrono"); }
     if (H) { corps.casque.visible = false; corps.events[0].visible = corps.events[1].visible = false; corps.lunettes.visible = false; }
     // cheveux longs du nouveau corps (v64), à la place des anciennes boules
     const gR = genre === "femme" && ModeleF ? "femme" : "homme";
@@ -3801,6 +4085,7 @@ function definirPeloton(liste) {
     const long = apparence.basStyle === "long";
     if (corps.modele) { corps.modele.mats[5] = long ? matBas : matPeau; corps.modele.mats[6] = long ? matBas : matBlanc; }
     if (corps.matCasqueH) corps.matCasqueH.color.set(apparence.casqueCouleur || 0xf2f4f6);
+    if (corps.casqueH && corps.styleCasque !== (apparence.casqueStyle || "classique")) corps.styleCasque = appliquerStyleCasque(corps.casqueH, apparence.casqueStyle);   // (v76) forme du casque
     matBlanc.color.set(apparence.chaussettes);                                   // (v69 suite) chaussettes de l'ancien modèle
     if (uYeux.uIris) { const y = IRIS[apparence.yeux]; uYeux.uIrisOn.value = y ? 1 : 0; if (y) uYeux.uIris.value.set(y); }
     if (corps.verresH && corps.verresH.type !== apparence.verres) {          // teinte des verres : dégradé du haut vers le bas
@@ -4181,7 +4466,7 @@ function definirPeloton(liste) {
   let fxS = null, fxType = "";
   const N_FX = 170;
   function majSaisonFx(dt, cam) {
-    if (saison === "ete" || (th && (th.desert || th.kona))) { if (fxS) fxS.visible = false; return; }
+    if (saison === "ete" || (th && (th.desert || th.kona)) || (th && th.villeN && saison !== "hiver")) { if (fxS) fxS.visible = false; return; }   // (v79) pas de feuilles ni de pétales en ville (carrés orange lumineux la nuit)
     try {
       if (!fxS) {
         const g = new T.BufferGeometry(), pos = new Float32Array(N_FX * 3), col = new Float32Array(N_FX * 3);
@@ -4191,7 +4476,7 @@ function definirPeloton(liste) {
         for (let i = 0; i < N_FX; i++) fxS.etat.push({ ph: Math.random() * 6.28, vit: 0.6 + Math.random() * 0.8, init: false });
         fxType = "";
       }
-      fxS.visible = true;
+      fxS.visible = true; fxS.material.color.setScalar(th && th.nuit ? 0.4 : 1);
       const g = fxS.geometry, pos = g.attributes.position.array, col = g.attributes.color.array;
       if (fxType !== saison) {
         fxType = saison; fxS.material.size = saison === "hiver" ? 0.13 : saison === "printemps" ? 0.17 : 0.26;
@@ -5454,9 +5739,10 @@ function definirPeloton(liste) {
     p.tex.needsUpdate = true; p.n = n;
   }
   function placerDecorThemes(d) {
+    const themeVille = themeNom === "villej" ? "ville" : themeNom;   // (v85) la ville de jour garde les familles de la ville
     for (const f of familles) {
       const actif = f.tri ? !GEO && !!(route && route.triathlon) : f.route ? !GEO && !!(route && route[f.route])   // (v69 suite) famille liée à la route (brebis), quel que soit le décor
-        : (GEO ? !!f.partout : true) && (f.themes ? f.themes.includes(themeNom) : themeNom === f.theme) && (!f.saisons || f.saisons.includes(saison));
+        : (GEO ? !!f.partout : true) && (f.themes ? f.themes.includes(themeVille) : themeVille === f.theme) && (!f.saisons || f.saisons.includes(saison)) && !(f.halo && !th.nuit);
       if (f.mesh.visible !== actif) f.mesh.visible = actif;
       if (!actif) continue;
       const k0 = Math.floor((d - 80) / f.pas), cotes = f.cotes || 1;
@@ -5793,7 +6079,49 @@ function definirPeloton(liste) {
   /* ---------- Aperçu de l'avatar (onglet Personnalisation) : le vrai cycliste du jeu, seul, vu par une seconde caméra ----------
      Le cycliste et trois lumières propres à l'aperçu sont mis sur le « calque » 1 : la caméra de l'aperçu ne voit que lui. */
   let rendApercu = null, camApercu = null, lumApercu = null, derniereImage3D = 0;
+  /* (v76) vignette d'un vélo pour « Mon garage » : le vrai modèle 3D, vu de côté, sans le cycliste, rendu dans une image (PNG transparent).
+     Calque 2 (le calque 1 sert à l'aperçu) : lumières et caméra propres, sans gêner l'aperçu. Rendu synchrone : à appeler un vélo à la fois. */
+  let rendVign = null, camVign = null;
+  function vignetteVelo(id, w, h) {
+    if (!renderer || !cycliste || !corps.modeleH || typeof VELOS === "undefined") return null;
+    if (!rendVign) {
+      rendVign = new T.WebGLRenderer({ canvas: document.createElement("canvas"), antialias: true, alpha: true, preserveDrawingBuffer: true });
+      if (T.sRGBEncoding) rendVign.outputEncoding = T.sRGBEncoding;
+      rendVign.setClearColor(0x000000, 0);
+      camVign = new T.PerspectiveCamera(27, 1, 0.05, 30); camVign.layers.set(2);
+      const hl = new T.HemisphereLight(0xeaf2ff, 0x4a4036, 0.9), dl = new T.DirectionalLight(0xfff4e6, 0.95), dl2 = new T.DirectionalLight(0xbfd4ff, 0.45);
+      for (const l of [hl, dl, dl2]) { l.layers.set(2); scene.add(l); }
+      dl.target = cycliste; dl2.target = cycliste;
+      camVign.userData = { dl, dl2 };
+    }
+    const avant = { velo: apparence.velo, roues: apparence.roues };
+    apparence.velo = id; apparence.roues = "";                // les roues d'origine du vélo
+    visibiliteCorps(false);
+    animerCycliste(0, 0.4, 0);
+    cycliste.traverse((o) => o.layers.enable(2));
+    const cachés = [corps.tete, corps.modeleH && corps.modeleH.mesh];
+    if (corps.chevL) for (const k in corps.chevL) cachés.push(corps.chevL[k].grp);
+    for (const k of ["torse", "epaules", "poitrine", "bassin", "cou", "collier", "cheveux", "casque", "lunettes", "nuque", "chignon", "queue"]) cachés.push(corps[k]);
+    for (const j of jambes) for (const k in j) if (k !== "manivelle" && k !== "pedale") cachés.push(j[k]);
+    for (const b of corps.bras) for (const k in b) cachés.push(b[k]);
+    for (const o of cachés) if (o && o.traverse) o.traverse((x) => x.layers.disable(2));
+    rendVign.setPixelRatio(1); rendVign.setSize(w, h, false);
+    camVign.aspect = w / h; camVign.updateProjectionMatrix();
+    cycliste.updateMatrixWorld(true);
+    const loc = (x, y, z) => cycliste.localToWorld(new T.Vector3(x, y, z));
+    const ta = Math.tan(camVign.fov * Math.PI / 360), rv = 1.04 * Math.max(0.5 / ta, 0.92 / (ta * camVign.aspect)), ang = Math.PI / 2 + 0.3;
+    camVign.position.copy(loc(Math.sin(ang) * rv, 0.5 + rv * 0.08, Math.cos(ang) * rv)); camVign.lookAt(loc(0, 0.48, 0));
+    camVign.userData.dl.position.copy(loc(-1.6, 3.2, -2.2)); camVign.userData.dl2.position.copy(loc(2.2, 1.6, 2.4));
+    const fog = scene.fog; scene.fog = null;
+    rendVign.render(scene, camVign);
+    scene.fog = fog;
+    const url = rendVign.domElement.toDataURL("image/png");
+    apparence.velo = avant.velo; apparence.roues = avant.roues;
+    animerCycliste(0, 0.4, 0);
+    return url;
+  }
   function apercuAvatar(cv, ang, veloSeul) {
+    const gros = veloSeul === "tete"; if (gros) veloSeul = false;      // (v76) « Mon garage » : cadrage de près sur la tête
     if (!renderer || !cycliste || !cv) return false;
     const w = cv.clientWidth, hh = cv.clientHeight;
     if (!w || !hh) return false;
@@ -5832,6 +6160,10 @@ function definirPeloton(liste) {
       const rv = 1.05 * Math.max(0.5 / ta, 0.92 / (ta * camApercu.aspect));
       camApercu.position.copy(loc(Math.sin(ang) * rv, 0.5 + rv * 0.1, Math.cos(ang) * rv));
       camApercu.lookAt(loc(0, 0.5, 0));
+    }
+    if (gros) {
+      const hp = cycliste.worldToLocal(corps.tete.getWorldPosition(new T.Vector3()));
+      camApercu.position.copy(loc(hp.x + Math.sin(ang) * 0.8, hp.y + 0.1, hp.z + Math.cos(ang) * 0.8)); camApercu.lookAt(loc(hp.x, hp.y + 0.04, hp.z));
     }
     lumApercu.dl.position.copy(loc(-1.6, 3.2, -2.2)); lumApercu.dl2.position.copy(loc(2.2, 1.6, 2.4));
     const fog = scene.fog; scene.fog = null;
@@ -5873,14 +6205,15 @@ function definirPeloton(liste) {
     const u = 0.9;
     const da = d + ecart;
     posChemin(da, _p);
-    const h = cap(da), y = alt3d(da);
-    const pente = Math.atan((alt3d(da + 3) - alt3d(da - 3)) / 6);
+    const h = cap(da), y = alt3d(da) + rampeH(da);                         // (v86) sur la rampe de départ du contre-la-montre, le cycliste est en hauteur
+    const pente = Math.atan((alt3d(da + 3) - alt3d(da - 3) + rampeH(da + 3) - rampeH(da - 3)) / 6);
     cycliste.position.set(_p[0] + Math.cos(h) * u, y, _p[1] + Math.sin(h) * u);
     // léger balancement du vélo en rythme du pédalage, plus fort quand l'effort monte
     const roulis = cad > 0 ? Math.sin(angleMan) * (0.012 + 0.03 * Math.max(0, effort - 0.6) + 0.09 * stand) : 0;
     cycliste.rotation.set(pente, -h, roulis);
     if (ia.length) majIA(e, dt, d);
     try { majArches(d); } catch (err) { /* l'arche ne doit jamais bloquer le rendu */ }
+    try { majRampe3d(d); } catch (err) { /* idem pour la rampe */ }
     try { majPortiques(d); } catch (err) { /* idem pour les portiques des segments */ }
     const pctPente = Math.tan(pente) * 100;
     const cibleDanseuse = vit > 1 ? Math.max(Math.min(1, Math.max(0, (ratio - 1.05) / 0.3)), Math.min(1, Math.max(0, (pctPente - 6.5) / 3)) * (ratio > 0.5 ? 1 : 0)) : 0;
@@ -5908,10 +6241,10 @@ function definirPeloton(liste) {
     }
     const fovV = V.fov || 58;
     if (camera.fov !== fovV) { camera.fov = fovV; camera.updateProjectionMatrix(); }
-    camera.position.set(_p[0] + Math.cos(hc) * (u + V.side), alt3d(dc) + V.up + secY, _p[1] + Math.sin(hc) * (u + V.side));
+    camera.position.set(_p[0] + Math.cos(hc) * (u + V.side), alt3d(dc) + rampeH(dc) + V.up + secY, _p[1] + Math.sin(hc) * (u + V.side));
     const dl = ref + V.look, hl = cap(dl);
     posChemin(dl, _q);
-    LT[0] = _q[0] + Math.cos(hl) * u; LT[1] = alt3d(dl) + V.lookUp + secR * 40; LT[2] = _q[1] + Math.sin(hl) * u;
+    LT[0] = _q[0] + Math.cos(hl) * u; LT[1] = alt3d(dl) + rampeH(dl) + V.lookUp + secR * 40; LT[2] = _q[1] + Math.sin(hl) * u;
     if (V.tv) { LT[0] = cycliste.position.x; LT[1] = cycliste.position.y + V.lookUp; LT[2] = cycliste.position.z; }   // télévision : toujours cadré sur toi
 
     if (corps.modeleH) {                 // vue action cam : la tête du nouveau corps (et ses yeux) disparaît, la caméra est à la place des yeux
@@ -5984,7 +6317,7 @@ function definirPeloton(liste) {
 
   const api = {
     creer: creer,
-    dessiner: dessiner,
+    dessiner: dessiner, definirRampe: definirRampe, compteRampe: compteRampe,
     definirTheme: (nom) => { if (renderer) appliquerTheme(nom); },
     definirQualite: (q) => { if (renderer) definirQualite(q); },
     definirAvatar: (g, couleur) => {
@@ -6008,6 +6341,7 @@ function definirPeloton(liste) {
       if (o.chaussettes !== undefined && isFinite(o.chaussettes)) apparence.chaussettes = o.chaussettes | 0;
       if (o.yeux === "marron" || IRIS[o.yeux]) apparence.yeux = o.yeux;
       if (o.casqueCouleur !== undefined && isFinite(o.casqueCouleur)) apparence.casqueCouleur = o.casqueCouleur | 0;
+      if (STYLES_CASQUE.includes(o.casqueStyle)) apparence.casqueStyle = o.casqueStyle;
       if (VERRES[o.verres]) apparence.verres = o.verres;
       if (o.casque !== undefined) apparence.casque = !!o.casque;
       if (o.lunettes !== undefined) apparence.lunettes = !!o.lunettes;
@@ -6032,6 +6366,7 @@ function definirPeloton(liste) {
     definirIntro: () => { introT = 0; },
     definirVue: (v) => { if (VUES[v]) vue = v; },
     apercu: (cv, ang, veloSeul) => apercuAvatar(cv, ang, veloSeul),
+    vignetteVelo,
     definirEffets: (o) => { if (o && o.pietons !== undefined) pietonsNiveau = o.pietons | 0; if (o && o.poussiere !== undefined) poussOn = !!o.poussiere; if (o && o.foule !== undefined) { fouleNiveau = o.foule | 0; fouleCle = ""; } },
     definirMeteo: (m) => { if (renderer) definirMeteo(m); },
     pluie: () => meteoVal.pluie,           // (v69) pour le son : intensité de la pluie (0 à 1) et nombre d’éclairs (le tonnerre suit chaque éclair)

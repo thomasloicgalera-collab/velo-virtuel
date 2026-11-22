@@ -15,6 +15,7 @@ const Fond = (function () {
     ardennes: { nom: "Forêt des Ardennes", ciel: ["#8DB3D2", "#E2EAEC"], soleil: "#FFF3DE", loin: [570, 130, 7, "#8C9DA6"], milieu: [690, 130, 8, "#3F6B45"], pres: [790, 60, 6, "#2E5A36"], sol: "#3C6A38", arbre: ["#24503A", "#2F6A3E"], arbres: "sapin", route: "#3A3F47" },
     toscane: { nom: "Collines de Toscane", ciel: ["#E9A86E", "#FBE3BE"], soleil: "#FFF0CF", loin: [560, 110, 7, "#B69B76"], milieu: [690, 100, 8, "#C9B062"], pres: [790, 50, 6, "#9DA450"], sol: "#B3A35A", arbre: ["#2C4A2E", "#35573A"], arbres: "sapin", route: "#3A3F47" },
     ville: { nom: "Ville de nuit", ciel: ["#0E1834", "#3A3552"], soleil: "#DDE6FF", loin: [570, 150, 14, "#252B45"], milieu: [690, 120, 18, "#1D2236"], pres: [790, 50, 8, "#2A2E3A"], sol: "#2E3240", arbre: ["#1E3A2C", "#24452F"], arbres: "rond", route: "#3A3F47" },
+    villej: { nom: "Ville de jour", ciel: ["#5B93D6", "#CFE0EE"], soleil: "#FFF3D6", loin: [570, 150, 14, "#8FA3B8"], milieu: [690, 120, 18, "#7C8FA3"], pres: [790, 50, 8, "#6A7788"], sol: "#7A7F88", arbre: ["#1E3A2C", "#24452F"], arbres: "rond", route: "#5A5F67" },
     desert: { nom: "Désert", ciel: ["#EFA865", "#FCE4BF"], soleil: "#FFF4DA", loin: [600, 190, 0, "#C47E4C"], milieu: [700, 90, 6, "#DDA466"], pres: [795, 50, 6, "#E8BD84"], sol: "#E2B172", arbre: ["#4F7D3C", "#5E8F47"], arbres: "cactus", mesa: true, route: "#6B5A48" },
     lanzarote: { nom: "Île volcanique (Lanzarote)", ciel: ["#4A92DC", "#DDEDF6"], soleil: "#FFF4D6", loin: [560, 170, 4, "#9A5032"], mer: "#2468A8", milieu: [730, 50, 9, "#5E3A2E"], pres: [800, 40, 7, "#2E2624"], sol: "#3A2A24", arbre: ["#4F8F40", "#5FA04A"], arbres: "palmier", route: "#34383E" },
     kona: { nom: "Île volcanique (Kona)", ciel: ["#3D8EE0", "#D8EEF8"], soleil: "#FFF6DC", loin: [560, 150, 3, "#6E625A"], mer: "#1F6FA8", milieu: [730, 50, 9, "#3A3532"], pres: [800, 40, 7, "#B89B57"], sol: "#2E2A27", arbre: ["#3F8A3A", "#56A046"], arbres: "palmier", route: "#34383E" }
@@ -208,6 +209,9 @@ function majModes() {
   const v = $("peloton-mode").value;
   document.querySelectorAll(".modes .mode").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === v)));
   $("options-ia").hidden = v === "aucun" || v === "fantome";
+  { const m = MONDES.find((x) => x.id === mondeChoisiId), tc = m && m.route ? toursConseilles(m.route) : null, st = $("peloton-tours");   // (v89) petit circuit : 1 tour en CLM, nombre conseillé sinon
+    if (tc && !m.toursDefaut) { if (v === "clm" && st.value === String(tc)) st.value = "1"; else if (v !== "clm" && st.value === "1") st.value = String(tc); } }
+  { const fixe = v === "course" || v === "clm" || v === "tour"; $("peloton-nombre").closest("label").hidden = fixe; $("note-40").hidden = !fixe; }   // (v86) 40 coureurs en compétition
   // (v69 suite) contre-la-montre et Tour : pas de séance ERG ; Tour : les étapes fixent le monde et le nombre de tours
   $("info-clm").hidden = v !== "clm"; $("info-ia").hidden = v === "clm";
   $("choix-seance").hidden = v === "clm" || v === "tour"; document.querySelector(".barre-seance").hidden = $("choix-seance").hidden;
@@ -225,8 +229,14 @@ function choisirMonde(id) {
   if (!MONDES.some((m) => m.id === id)) id = MONDES[0].id;
   // nombre de tours conseillé par le monde (critérium : 10) ; en le quittant, on revient à 3 tours
   const avant = MONDES.find((x) => x.id === mondeChoisiId), m0 = MONDES.find((x) => x.id === id), sel = $("peloton-tours");
+  // (v88) petit circuit : 10 tours au moins et 40 km au moins (toursConseilles) ; en le quittant, on revient à 3 tours
+  const tcM = m0 && m0.route ? toursConseilles(m0.route) : null, tcAvant = avant && avant.route ? toursConseilles(avant.route) : null;
   if (m0 && m0.toursDefaut) sel.value = String(m0.toursDefaut);
+  else if (tcM) sel.value = $("peloton-mode").value === "clm" ? "1" : String(tcM);   // (v89) contre-la-montre : un seul tour
   else if (avant && avant.toursDefaut && sel.value === String(avant.toursDefaut)) sel.value = "3";
+  else if (tcAvant && sel.value === String(tcAvant)) sel.value = "3";
+  // (v85) monde de contre-la-montre : le mode « Contre-la-montre » est choisi tout seul quand on change de monde (sauf dans un Tour)
+  if (m0 && m0.modeDefaut && mondeChoisiId !== null && mondeChoisiId !== id && $("peloton-mode").value !== "tour" && $("peloton-mode").value !== m0.modeDefaut) { $("peloton-mode").value = m0.modeDefaut; $("peloton-mode").dispatchEvent(new Event("change")); majModes(); }
   mondeChoisiId = id;
   try { localStorage.setItem(CLE_MONDE_CHOISI, id); } catch (e) { /* ignoré */ }
   document.querySelectorAll("#tuiles-mondes .tuile-monde").forEach((t) => t.classList.toggle("choisi", t.dataset.id === id));
@@ -235,37 +245,14 @@ function choisirMonde(id) {
 }
 // (v69 suite) point de départ : début du parcours, pied d'une montée (segments chronométrés) ou tous les 5 km (10 km au-delà de 60 km)
 let departsSig = "";
-function majDeparts(m, r) {
-  const sel = $("depart-km"), lab = $("choix-depart");
-  lab.hidden = !(r.longueur > 3000);
-  const sig = m.id + "|" + Math.round(r.longueur);
-  if (sig === departsSig) return;
-  departsSig = sig;
-  const garde = sel.dataset.monde === m.id ? sel.value : "0";
-  const opts = [[0, "Au début du parcours"]];
-  if (r.longueur > 3000) {
-    const sauve = route;
-    let segs = [];
-    route = r;
-    try { segs = Progression.segmentsRoute(); } catch (e) { segs = []; } finally { route = sauve; }
-    for (const s of segs) if (s.type === "montee" && s.s <= 300) opts[0][1] = "Au début du parcours (pied de « " + s.nom + " »)";
-    for (const s of segs) if (s.type === "montee" && s.s > 300) opts.push([Math.max(0, Math.round(s.s - 200)), "Pied de « " + s.nom + " » (km " + fr1(s.s / 1000) + ")"]);
-    const pas = r.longueur > 60000 ? 10000 : 5000;
-    for (let d = pas; d < r.longueur - 1000; d += pas) opts.push([d, "Km " + d / 1000]);
-  }
-  opts.sort((a, b) => a[0] - b[0]);
-  sel.innerHTML = "";
-  for (const [d, t] of opts) { const o = document.createElement("option"); o.value = String(d); o.textContent = t; sel.append(o); }
-  sel.value = [...sel.options].some((o) => o.value === garde) ? garde : "0";
-  sel.dataset.monde = m.id;
-}
+function majDeparts() { $("depart-km").value = "0"; }   // (v90) le départ est toujours au début du parcours (plus de choix)
 $("depart-km").addEventListener("change", () => majResumeChoix());
 $("echauffement").addEventListener("change", () => { sauverReglages(); majResumeChoix(); });
 $("seance-monde").addEventListener("change", () => majResumeChoix());
 $("btn-import-accueil").addEventListener("click", () => $("fichier-erg").click());
 function majResumeChoix() { majResumeChoixDetail(); majAccueilB(); }
 // (v70) maquette B : le monde choisi en grand (nom, chiffres, profil coloré par la pente) et le résumé des options repliées
-const NIVEAUX_COURTS = { facile: "facile", equilibre: "équilibré", expert: "expert" };
+const NIVEAUX_COURTS = { facile: "facile (80 % FTP)", equilibre: "normal (100 % FTP)", expert: "hardcore (115 % FTP)" };
 let accueilBDemande = false;
 function majAccueilB() {                  // regroupe les appels (changement d'option + majResumeChoix) : un seul calcul par image
   if (accueilBDemande) return;
@@ -286,12 +273,11 @@ function majAccueilBMaintenant() {
   dessinerProfilAccueil($("am-profil"), r);
   const p = [];
   if (!$("options-ia").hidden) {
-    p.push($("peloton-nombre").value + " coureurs · " + NIVEAUX_COURTS[$("peloton-niveau").value]);
+    p.push((["course", "clm", "tour"].includes($("peloton-mode").value) ? 40 : $("peloton-nombre").value) + " coureurs · " + NIVEAUX_COURTS[$("peloton-niveau").value]);
     if (!$("choix-tours").hidden) { const nt = parseInt($("peloton-tours").value, 10) || 0; p.push(nt ? nt + (nt > 1 ? " tours" : " tour") : "sans arrivée"); }
     if (!$("choix-echauffement").hidden && $("echauffement").checked) p.push("échauffement");
   }
   if (!$("choix-seance").hidden && $("seance-monde").value) p.push("ERG : " + $("seance-monde").selectedOptions[0].textContent);
-  if (!$("choix-depart").hidden && parseFloat($("depart-km").value) > 0) p.push("départ km " + fr1(parseFloat($("depart-km").value) / 1000));
   if ($("fantome-pr").checked) p.push("fantôme du record");
   $("options-resume").textContent = p.length ? p.join(" · ") : "réglages par défaut";
 }
@@ -331,11 +317,10 @@ function majResumeChoixDetail() {
   const pm = $("peloton-mode").value, clm = pm === "clm", tourM = pm === "tour", course = pm === "course" || clm, nt = parseInt($("peloton-tours").value, 10) || 0;
   $("choix-tours").hidden = !course || !r.boucle;
   $("choix-echauffement").hidden = !course;
-  $("choix-depart").hidden = tourM;
   $("peloton-tours").options[0].hidden = clm;                                 // contre-la-montre : toujours une arrivée
   if (clm && nt === 0) $("peloton-tours").value = "1";
   [...$("peloton-tours").options].forEach((o) => { const k = parseInt(o.value, 10); if (k) o.textContent = k + (k > 1 ? " tours · " : " tour · ") + fr1(k * r.longueur / 1000) + " km"; });
-  majDeparts(m, r);
+  majDeparts();
   majChoixSeanceMonde();
   if (tourM) { $("resume-choix-detail").textContent = typeof Tour !== "undefined" ? Tour.resume() : ""; return; }
   const dep = parseFloat($("depart-km").value) || 0, sc = clm ? null : seanceChoisie();
@@ -364,4 +349,55 @@ $("btn-cest-parti").addEventListener("click", () => {
   const m = MONDES.find((x) => x.id === mondeChoisiId);
   Fond.montrer(m ? m.theme : "campagne");
   rendreTuilesMondes();
+})();
+
+/* ---------- (v90) Accueil en 3 étapes : filtres de parcours ; pastille de connexion de la barre du haut ---------- */
+(function () {
+  const CAT = {
+    montagne: (m) => m.theme === "montagne",
+    plaine: (m) => !["montagne", "ville", "villej"].includes(m.theme) && m.modeDefaut !== "clm",
+    ville: (m) => m.theme === "ville" || m.theme === "villej",
+    chrono: (m) => m.modeDefaut === "clm",
+    gpx: (m) => !m.integre
+  };
+  let filtre = "tous";
+  function appliquerFiltre() {
+    document.querySelectorAll("#tuiles-mondes .tuile-monde").forEach((t) => {
+      const m = MONDES.find((x) => x.id === t.dataset.id);
+      t.hidden = !(filtre === "tous" || (m && CAT[filtre](m)));
+    });
+  }
+  const cont = $("ac-filtres");
+  if (cont) {
+    cont.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-f]");
+      if (!b) return;
+      filtre = b.dataset.f;
+      cont.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+      appliquerFiltre();
+    });
+    new MutationObserver(appliquerFiltre).observe($("tuiles-mondes"), { childList: true });
+  }
+  $("puce-connexion").addEventListener("click", () => afficherOnglet($("onglet-connectivite").hidden ? "connectivite" : "world"));
+})();
+
+/* ---------- (v90) Historique en 3 onglets (Sorties, Analyse, Bilans) et Réglages en sections ---------- */
+(function () {
+  const barH = $("hist-onglets"), secH = [...document.querySelectorAll("#onglet-historique > section[data-h]")];
+  function affH(k) {
+    secH.forEach((s) => { s.hidden = s.dataset.h !== k; });
+    barH.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.h === k)));
+    if (typeof majHistorique === "function") majHistorique();       // les graphiques se dessinent à leur taille réelle
+  }
+  window.montrerSortiesHistorique = () => { secH.forEach((s) => { s.hidden = s.dataset.h !== "sorties"; }); barH.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.h === "sorties"))); };
+  barH.addEventListener("click", (e) => { const b = e.target.closest("button[data-h]"); if (b) affH(b.dataset.h); });
+  secH.forEach((s) => { s.hidden = s.dataset.h !== "sorties"; });
+  const barR = $("reg-nav");
+  function affR(k) {
+    document.querySelectorAll("#onglet-parametres [data-r]").forEach((e) => { if (e.parentElement !== barR) e.hidden = e.dataset.r !== k; });
+    $("reg-carte").hidden = k === "donnees";
+    barR.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.r === k)));
+  }
+  barR.addEventListener("click", (e) => { const b = e.target.closest("button[data-r]"); if (b) affR(b.dataset.r); });
+  affR("profil");
 })();

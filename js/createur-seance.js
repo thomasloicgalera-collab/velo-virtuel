@@ -102,6 +102,7 @@ const Createur = (function () {
     lignes = JSON.parse(JSON.stringify(s.cree || []));
     $("crea-nom").value = s.nom; $("crea-msg").textContent = "Tu modifies « " + s.nom + " » : « Enregistrer » remplace l’ancienne version.";
     rendre();
+    if (typeof sqOnglet === "function") sqOnglet("creer");          // (v76) le créateur est dans son propre onglet
     $("createur").scrollIntoView({ behavior: "smooth", block: "start" });
   }
   rendre();

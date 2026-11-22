@@ -191,6 +191,7 @@ async function afficherDetail(id) {
   try { samples = await lireDonnees(id); } catch (e) { /* géré ci-dessous */ }
   if (!samples) { log("Les données de cette séance sont introuvables."); return; }
   detail = { resume, samples };
+  if (typeof montrerSortiesHistorique === "function") montrerSortiesHistorique();   // (v91) le détail est dans l'onglet Sorties, même si on était sur Analyse ou Bilans
   $("detail-seance").hidden = false;
   $("detail-titre").textContent = "Séance du " + new Date(resume.id).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" }) +
     " – " + resume.parcours;
@@ -253,7 +254,7 @@ $("tab-perso").addEventListener("click", () => afficherOnglet("perso"));
    ===================================================================== */
 function reinitialiserSeance() {
   balade.enCours = false; balade.auto = false; balade.immobile = 0;
-  balade.distance = balade.d0 || 0; balade.vitesse = 0; balade.temps = 0; balade.altitude = balade.d0 ? altitudeA(balade.d0) : route.alt0;   // (v69 suite) on repart du point de départ choisi
+  balade.deplace = 0; balade.distance = balade.d0 || 0; balade.vitesse = 0; balade.temps = 0; balade.altitude = balade.d0 ? altitudeA(balade.d0) : route.alt0;   // (v69 suite) on repart du point de départ choisi
   session.samples = []; session.debut = null; session.dernierEnreg = 0; session.pause = 0; seance.t0 = 0;
   annulerEchauffement();                                         // (v74) un échauffement abandonné ne traîne pas jusqu'à la sortie suivante
   if (typeof remettreRavito === "function") remettreRavito();
