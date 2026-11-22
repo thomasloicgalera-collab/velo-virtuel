@@ -1254,3 +1254,7 @@ body:has(#st-trainer.ok, #st-power.ok, #st-hr.ok) .puce-connexion i { background
 .df-l { display: flex; justify-content: space-between; font-size: .86rem; padding: 2px 0; }
 .df-l.moi { color: var(--accent); font-weight: 700; }
 .df-l em { font-style: normal; color: var(--discret); font-weight: 400; margin-left: 6px; }
+
+/* (v98) envoi à Nolio */
+.rf-nolio { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0; padding: 8px 12px; border: 1px solid var(--trait); border-radius: 12px; background: rgba(255,255,255,.04); }
+.rf-nolio span { color: var(--discret); font-size: .86rem; flex: 1; }

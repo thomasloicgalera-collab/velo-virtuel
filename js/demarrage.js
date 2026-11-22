@@ -50,7 +50,7 @@ $("saison").addEventListener("change", () => { if (monde3d) monde3d.definirSaiso
 $("pietons").addEventListener("change", () => { if (monde3d) monde3d.definirEffets({ pietons: parseInt($("pietons").value, 10) }); sauverReglages(); });
 $("foule").addEventListener("change", () => { if (monde3d) monde3d.definirEffets({ foule: parseInt($("foule").value, 10) }); sauverReglages(); });
 $("moment").addEventListener("change", () => { if (monde3d) monde3d.definirMoment($("moment").value); sauverReglages(); });
-$("qualite").addEventListener("change", () => { if (monde3d) monde3d.definirQualite($("qualite").value); sauverReglages(); });
+$("qualite").addEventListener("change", () => { if (monde3d) monde3d.definirQualite($("qualite").value); Perf.regler($("qualite").value); sauverReglages(); });
 function appliquerSon() { Son.regler($("son-actif").checked, parseInt($("son-volume").value, 10) / 100); }
 $("son-actif").addEventListener("change", () => { appliquerSon(); sauverReglages(); });
 $("son-volume").addEventListener("input", () => { appliquerSon(); sauverReglages(); });
@@ -224,6 +224,7 @@ function tirerAmbiance(appliquer) {
   if (r.autopause === false) $("auto-pause").checked = false;
   if (r.monde && Monde3D.themes[r.monde]) $("monde").value = r.monde;
   if (r.qualite) $("qualite").value = r.qualite;
+  Perf.regler($("qualite").value);                    // (v99)
   // (v72) « Automatique » par défaut : l'ancien réglage enregistré (2K par défaut avant) est remis une fois sur Automatique, ensuite le choix de l'utilisateur est respecté
   let resAuto = false;
   try { resAuto = !localStorage.getItem("velo_resolution_auto"); localStorage.setItem("velo_resolution_auto", "1"); } catch (e) { /* ignoré */ }

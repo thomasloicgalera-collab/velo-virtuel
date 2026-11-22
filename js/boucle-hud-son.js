@@ -814,9 +814,11 @@ function afficherResume(res) {
     res.tours.forEach((x, i) => { h += '<div class="rf-l' + (x === mini && res.tours.length > 1 ? " best" : "") + '"><span>Tour ' + (i + 1) + "</span><b>" + formatDuree(Math.round(x)) + "</b></div>"; });
   }
   if (typeof Photos !== "undefined") h += Photos.htmlResume(res.photos);
+  if (typeof Nolio !== "undefined") h += Nolio.htmlResume();          // (v98)
   h += '<div class="rf-boutons"><button id="resume-detail">Voir le détail</button><button id="resume-accueil" class="plein">Retour à l’accueil</button></div>';
   $("resume-fin-c").innerHTML = h; $("resume-fin").hidden = false;
   if (typeof Photos !== "undefined") Photos.brancherResume($("resume-fin-c"), res.photos);
+  if (typeof Nolio !== "undefined") Nolio.brancher($("resume-fin-c"));
   // on ferme : bouton, touche Échap ou clic à côté de la fenêtre
   const fermer = () => { $("resume-fin").hidden = true; document.removeEventListener("keydown", echap); };
   const echap = (e) => { if (e.key === "Escape") fermer(); };
@@ -847,6 +849,7 @@ function boucle3D() {
       peloton: rp ? rp.peloton : donnees3D(t),
       vibre: 0   // (v82) plus de secousses de la caméra sur les pavés
     });
+    Perf.image(dt * 1000);                                // (v99) régulateur de performance
     if (typeof Photos !== "undefined") Photos.apresDessin($("monde3d"));   // (v72) photo demandée : copiée juste après le dessin
   } catch (err) {
     log("Monde 3D arrêté : " + err.message);
@@ -870,6 +873,7 @@ function demarrer3D() {
   }
   try {
     monde3d = Monde3D.creer($("monde3d"), { theme: $("monde").value, qualite: $("qualite").value });
+    Perf.regler($("qualite").value);                  // (v99) niveau de performance appliqué au monde 3D
     monde3d.definirResolution(parseInt($("resolution").value, 10));
     monde3d.definirEffets({ poussiere: $("poussiere").checked });
     monde3d.definirVue($("vue-camera").value);

@@ -269,7 +269,9 @@ $("btn-export").addEventListener("click", async () => {
   const id = session.debut;
   try {
     const nom = nomFichierFit(id);
-    telecharger(construireFit(session.samples, id), nom);
+    const octetsFit = construireFit(session.samples, id);
+    telecharger(octetsFit, nom);
+    if (typeof Nolio !== "undefined") Nolio.terminee(octetsFit, id);          // (v98) envoi à Nolio (automatique si la case est cochée)
     log("Fichier " + nom + " créé (" + formatDuree(session.samples.length) + ").");
   } catch (err) {
     log("Export impossible : " + err.message);

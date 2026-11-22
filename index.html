@@ -541,10 +541,13 @@
         <fieldset data-r="affichage">
           <legend>Graphisme</legend>
           <label>Qualité&nbsp;: <select id="qualite">
+            <option value="auto" selected>Automatique (recommandé)</option>
             <option value="haute">Élevée</option>
-            <option value="normale" selected>Normale</option>
+            <option value="normale">Normale</option>
             <option value="legere">Légère</option>
+            <option value="minimale">Minimale (ordinateur peu puissant)</option>
           </select></label>
+          <div class="stats" id="perf-etat"></div>
           <label hidden>Moment de la journée&nbsp;: <select id="moment"><option value="jour" selected>Journée</option><option value="matin">Matin</option><option value="soir">Soir (couchant)</option></select></label>
           <label hidden>Météo&nbsp;: <select id="meteo"><option value="auto" selected>Aléatoire (change au fil de la balade)</option><option value="clair">Dégagé</option><option value="nuageux">Nuageux</option><option value="brume">Brouillard</option><option value="orage">Orage</option></select></label>
           <label hidden>Saison&nbsp;: <select id="saison"><option value="printemps">Printemps</option><option value="ete" selected>Été</option><option value="automne">Automne</option><option value="hiver">Hiver</option></select></label>
@@ -555,7 +558,7 @@
             <option value="1080">Full HD (1080p)</option>
             <option value="0" selected>Automatique (taille de l’écran)</option>
           </select></label>
-          <details class="reg-aide"><summary>En savoir plus</summary><div class="stats">Si l’animation saccade, choisis « Full HD » et/ou la qualité « Légère ».</div></details>
+          <details class="reg-aide"><summary>En savoir plus</summary><div class="stats">En qualité « Automatique », l’application surveille les images par seconde : si l’animation saccade, elle réduit toute seule le nombre de coureurs détaillés, les ombres, la taille de l’image, les supporters et les arbres (et remonte si tout va bien). Sur un ordinateur peu puissant, « Minimale » force le mode le plus léger.</div></details>
         </fieldset>
         <fieldset hidden>   <!-- (v72) toujours actif, plus affiché -->
           <legend>Aérodynamisme et vent</legend>
@@ -594,6 +597,13 @@
       <h2>Installer l’application</h2>
       <p class="info" style="margin-top:0" id="installer-texte">Ouvre le Vélo virtuel comme un vrai logiciel (sa propre fenêtre, une icône sur le bureau, démarrage sans Internet). Fonctionne avec Chrome ou Edge sur Windows, Mac, Linux et Chromebook, depuis l’adresse en ligne du site.</p>
       <div class="barre"><button id="btn-installer" class="plein" hidden>Installer l’application</button><span class="stats" id="msg-installer" aria-live="polite"></span></div>
+    </section>
+    <section class="carte" data-r="donnees">
+      <h2>Nolio</h2>
+      <p class="info" style="margin-top:0">Envoie tes séances à <b>Nolio</b> : le fichier .FIT est envoyé par l’API de Nolio à la fin de la sortie (« Terminer et enregistrer »). Crée une clé d’API dans ton compte Nolio, puis colle-la ici. Elle reste dans ce navigateur et n’est envoyée qu’à nolio.io.</p>
+      <label>Clé d’API Nolio&nbsp;: <input type="password" id="nolio-jeton" autocomplete="off" placeholder="Colle ta clé ici" style="width:22em;max-width:100%"></label>
+      <label class="case"><input type="checkbox" id="nolio-auto"> Envoyer automatiquement chaque séance terminée à Nolio</label>
+      <div class="barre"><button type="button" id="nolio-tester">Tester la connexion</button><button type="button" class="petit" id="nolio-oublier">Effacer la clé</button><span class="stats" id="nolio-msg" aria-live="polite"></span></div>
     </section>
     <section class="carte" data-r="donnees">
       <h2>Sauvegarde de mes données</h2>
@@ -692,11 +702,13 @@
 <script src="js/tour.js"></script>
 <script src="js/revoir-ecran2.js"></script>
 <script src="js/mondes.js"></script>
+<script src="js/performance.js"></script>
 <script src="js/formats.js"></script>
 <script src="js/programmes.js"></script>
 <script src="js/defis.js"></script>
 <script src="js/alertes.js"></script>
 <script src="js/rapport.js"></script>
+<script src="js/nolio.js"></script>
 <script src="js/demarrage.js"></script>
 <script src="js/accueil.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>

@@ -3231,7 +3231,7 @@ const Monde3D = (function () {
     baroudeur: { genre: "homme", peau: 0xf0c8a8, cheveux: 0x8a5a2b, coupe: "court", barbe: "bouc", casque: 0xf2f4f6, verres: "fume" },
     puncheur: { genre: "femme", peau: 0xd9a577, cheveux: 0x3b2416, coupe: "chignon", barbe: "aucune", casque: 0x2b2f3a, verres: "violet" }
   };
-  const DIST_REEL_IA = 100;
+  let DIST_REEL_IA = 100;             // (v99) variable : réduite par les niveaux de performance (definirPerf)
   // allure tirée au hasard (graine look de js/parcours-physique.js) : peau, cheveux, coupe, barbe, casque (parfois à la couleur du maillot), verres
   const PEAUX_IA = [0xf3d2b8, 0xe8c09a, 0xd9a577, 0xc68a5e, 0x9a6440, 0x6e4528], CHEVEUX_IA = [0x121212, 0x2a1c12, 0x3b2416, 0x5a3a22, 0x8a5a2b, 0xb98a50, 0xd8b878, 0x8c8c8c];
   function persoAleatoire(look, femme, couleur) {
@@ -3583,6 +3583,13 @@ function definirPeloton(liste) {
   const COUL_VELO_IA = { v5rs: 0xe9ebee, foil: 0x6e7175, madone: 0xe6e2d6, dogma: 0xb3141a, plasma: 0xdfe6e8, speed: 0x6640c8, triton: 0x1d1e21, tritonb: 0x84d4ca };
   function majIA(e, dt, dRef) {
     const L = e.peloton || [];
+    // (v99) seuls les `perf.reel` coureurs les plus proches (le long de la route) ont le corps réaliste, les autres sont simplifiés
+    if (perf.reel < ia.length) {
+      const ordre = [];
+      for (let k = 0; k < ia.length; k++) ordre.push([L[k] ? Math.abs(L[k].d - e.distance) : 1e9, k]);
+      ordre.sort((a, b) => a[0] - b[0]);
+      for (let j = 0; j < ordre.length; j++) ia[ordre[j][1]].elig = j < perf.reel;
+    } else for (let k = 0; k < ia.length; k++) ia[k].elig = true;
     for (let k = 0; k < ia.length; k++) {
       const c = ia[k], q = L[k], k0 = k;
       if (!q) { c.g.visible = false; continue; }
@@ -3610,12 +3617,12 @@ function definirPeloton(liste) {
       if (rel < 0 && vue !== "action" && Math.hypot(c.g.position.x - camera.position.x, c.g.position.z - camera.position.z) < 3.0) { c.g.visible = false; continue; }
       if (c.reel) {                       // corps réaliste de près, coureur simplifié au loin (un peu d'écart entre les deux seuils pour ne pas clignoter)
         const dc = Math.hypot(c.g.position.x - camera.position.x, c.g.position.y - camera.position.y, c.g.position.z - camera.position.z);
-        const on = c.reel.actif ? dc < DIST_REEL_IA + 10 : dc < DIST_REEL_IA;
-        if (on !== c.reel.actif || c.reelMaj) { c.reelMaj = false; montrerReelIA(c, on); c.saut = true; }
+        const on = c.elig && (c.reel.actif ? dc < DIST_REEL_IA + 10 : dc < DIST_REEL_IA);
+        if (on !== c.reel.actif || c.reelMaj) { c.reelMaj = false; montrerReelIA(c, on); c.fr = -1; }
         c.dc = dc;
       }
       // corps réaliste : recalculé à chaque image de près, une image sur deux au-delà de 40 m (beaucoup de coureurs)
-      if (c.reel && c.reel.actif) { c.saut = !c.saut; if (!c.saut || c.dc < 40) poserReelIA(c, temps); }
+      if (c.reel && c.reel.actif) { c.fr = (c.fr || 0) + 1; const dv = c.dc < 15 ? 1 : c.dc < 40 ? perf.mid : perf.far; if (c.fr % dv === 0) poserReelIA(c, temps); }
       else animerIA(c, temps);
       if (c.etiq) {                       // l'étiquette grossit avec la distance pour rester lisible, et disparaît au loin
         const dist = Math.hypot(c.g.position.x - camera.position.x, c.g.position.y - camera.position.y, c.g.position.z - camera.position.z);
@@ -4538,14 +4545,40 @@ function definirPeloton(liste) {
     appliquerMoment();
   }
 
+  /* (v99) niveaux de performance : 0 = tout, 3 = minimal. Choisis par le régulateur automatique (js/performance.js) quand la qualité est « Automatique »
+     (il baisse d'un niveau si l'animation saccade, remonte si tout va bien) ou à la main (« Minimale » = niveau 3).
+     reel : nombre maximal de coureurs virtuels réalistes (les plus proches ; les autres sont simplifiés) ; dist : distance du corps réaliste ;
+     mid / far : un calcul de pose toutes les n images entre 15 et 40 m / au-delà ; ombres ; ombre : taille de la carte d'ombre ;
+     foule : niveau maximal des supporters ; mult : densité d'arbres ; cap : hauteur maximale de l'image calculée (0 = aucune limite) */
+  const PERF_TAB = [
+    { reel: 20, dist: 100, mid: 1, far: 2, ombres: 1, ombre: 2048, foule: 2, mult: 1, cap: 0 },
+    { reel: 8, dist: 60, mid: 2, far: 3, ombres: 1, ombre: 1024, foule: 2, mult: 0.85, cap: 1080 },
+    { reel: 3, dist: 35, mid: 3, far: 4, ombres: 0, ombre: 1024, foule: 1, mult: 0.65, cap: 900 },
+    { reel: 0, dist: 0, mid: 4, far: 4, ombres: 0, ombre: 1024, foule: 0, mult: 0.45, cap: 720 }
+  ];
+  let perf = Object.assign({}, PERF_TAB[0]), perfN = 0, qNom = "normale", qDensBase = 0.8;
+  const fouleEff = () => Math.min(fouleNiveau, perf.foule);
+  function definirPerf(n) {
+    n = Math.max(0, Math.min(3, n | 0));
+    const avant = qDens;
+    perfN = n; perf = Object.assign({}, PERF_TAB[n]);
+    DIST_REEL_IA = perf.dist;
+    qDens = qDensBase * perf.mult;
+    if (renderer) {
+      lumiere.castShadow = perf.ombres === 1 && qNom !== "legere" && qNom !== "minimale";
+      const tm = qNom === "haute" && n === 0 ? 4096 : perf.ombre, sh = lumiere.shadow;   // ombres plus fines (arbres, maisons)
+      if (sh.mapSize.x !== tm) { sh.mapSize.set(tm, tm); if (sh.map) { sh.map.dispose(); sh.map = null; } }
+      taille = [0, 0, 0];
+      if (Math.abs(avant - qDens) > 0.01) { derniereBase = null; if (GEO) reelAFaire = true; }
+    }
+  }
   function definirQualite(q) {
-    qDens = { haute: 1, normale: 0.8, legere: 0.45 }[q] || 0.8;
+    qNom = q;
+    qDensBase = { haute: 1, normale: 0.8, legere: 0.45, minimale: 0.45 }[q] || 0.8;
     const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
-    ratioQ = { haute: Math.min(dpr, 2), normale: 1, legere: 0.7 }[q] || 1;
+    ratioQ = { haute: Math.min(dpr, 2), normale: 1, legere: 0.7, minimale: 0.7 }[q] || 1;
     renderer.setPixelRatio(ratioQ);
-    lumiere.castShadow = q !== "legere";
-    const tm = q === "haute" ? 4096 : 2048, sh = lumiere.shadow;   // ombres plus fines (arbres, maisons)
-    if (sh.mapSize.x !== tm) { sh.mapSize.set(tm, tm); if (sh.map) { sh.map.dispose(); sh.map = null; } }
+    definirPerf(perfN);
     taille = [0, 0, 0];
     derniereBase = null;
     if (GEO) reelAFaire = true;
@@ -4683,7 +4716,7 @@ function definirPeloton(liste) {
   }
   function batirFoule(k0, k1) {
     fouleListe = [];
-    const seuil = th && th.villeN ? (fouleNiveau >= 2 ? 0.97 : 0.7) : fouleNiveau >= 2 ? 0.78 : 0.4;   // critérium : public tout le long du circuit
+    const seuil = th && th.villeN ? (fouleEff() >= 2 ? 0.97 : 0.7) : fouleEff() >= 2 ? 0.78 : 0.4;   // critérium : public tout le long du circuit
     for (let k = k0; k <= k1 && fouleListe.length < FOULE_MAX; k++) {
       const seed = k * 7.31 + 11;
       const D = k * ESPACE_FOULE + hash(seed + 5) * ESPACE_FOULE * 0.6;
@@ -4691,7 +4724,7 @@ function definirPeloton(liste) {
       const grand = (((D % 1000) + 1000) % 1000) < ESPACE_FOULE;
       if (!grand && hash(seed) > seuil) continue;
       let n = grand ? 8 + Math.floor(hash(seed + 2) * 5) : 1 + Math.floor(hash(seed + 2) * 3.6);
-      if (fouleNiveau < 2) n = Math.max(1, Math.ceil(n / 2));
+      if (fouleEff() < 2) n = Math.max(1, Math.ceil(n / 2));
       const cote = hash(seed + 1) < 0.35 ? -1 : hash(seed + 1) < 0.75 ? 1 : 0;
       let signes = grand ? 3 : (hash(seed + 3) < 0.7 ? 1 : 0);
       for (let j = 0; j < n && fouleListe.length < FOULE_MAX; j++) {
@@ -4764,13 +4797,13 @@ function definirPeloton(liste) {
   }
   function majFoule(d) {
     if (!foule) return;
-    if (fouleNiveau <= 0) {
+    if (fouleEff() <= 0) {
       if (foule.torse.count) { for (const m of foule.tous) m.count = 0; }
       fouleCle = "";
       return;
     }
     const k0 = Math.floor((d - 25) / ESPACE_FOULE), k1 = Math.floor((d + 340) / ESPACE_FOULE);
-    const cle = k0 + "|" + fouleNiveau + "|" + (GEO ? "g" : "n") + "|" + (route ? route.longueur + route.nom : "");
+    const cle = k0 + "|" + fouleEff() + "|" + (GEO ? "g" : "n") + "|" + (route ? route.longueur + route.nom : "");
     if (cle !== fouleCle) { fouleCle = cle; batirFoule(k0, k1); }
     const M = foule.m, t = temps;
     posChemin(d, _q);
@@ -6172,8 +6205,12 @@ function definirPeloton(liste) {
     return true;
   }
 
+  // (v99) temps passé dans chaque partie de l'image (moyenne glissante, en ms) : monde3d.profil()
+  const PROF = { terrain: 0, coureurs: 0, cycliste: 0, camera: 0, decor: 0, rendu: 0, total: 0 };
+  const marque = (k, t0) => { const t = performance.now(); PROF[k] += (t - t0 - PROF[k]) * 0.05; return t; };
   function dessiner(e) {
-    derniereImage3D = performance.now();
+    let tp = derniereImage3D = performance.now();
+    const tDebut = tp;
     if (!renderer) return;
     if (preparerRoute()) derniereBase = null;
     if (reelAFaire) majReel();
@@ -6189,6 +6226,7 @@ function definirPeloton(liste) {
       else { reconstruire(base, d, 1); etapeR = 2; baseR = base; dR = d; }
       derniereBase = base;
     } else if (etapeR) { reconstruire(baseR, dR, etapeR); etapeR = etapeR === 2 ? 4 : etapeR === 4 ? 3 : 0; }
+    tp = marque("terrain", tp);
 
     const vit = e.vitesse || 0;
     const ratio = Math.max(0, e.ratio || 0);          // puissance / FTP
@@ -6211,7 +6249,9 @@ function definirPeloton(liste) {
     // léger balancement du vélo en rythme du pédalage, plus fort quand l'effort monte
     const roulis = cad > 0 ? Math.sin(angleMan) * (0.012 + 0.03 * Math.max(0, effort - 0.6) + 0.09 * stand) : 0;
     cycliste.rotation.set(pente, -h, roulis);
+    tp = marque("cycliste", tp);
     if (ia.length) majIA(e, dt, d);
+    tp = marque("coureurs", tp);
     try { majArches(d); } catch (err) { /* l'arche ne doit jamais bloquer le rendu */ }
     try { majRampe3d(d); } catch (err) { /* idem pour la rampe */ }
     try { majPortiques(d); } catch (err) { /* idem pour les portiques des segments */ }
@@ -6275,6 +6315,7 @@ function definirPeloton(liste) {
     }
     camera.lookAt(LT[0], LT[1], LT[2]);
 
+    tp = marque("camera", tp);
     // lumière et ombres : la zone d'ombre suit le cycliste, un peu vers l'avant
     if (lumiere.castShadow) {
       const dm = d + 22, hm = cap(dm);
@@ -6299,12 +6340,15 @@ function definirPeloton(liste) {
     soleil.position.set(camera.position.x + SUN.x * 850, camera.position.y + SUN.y * 850, camera.position.z + SUN.z * 850);
     if (lueur) lueur.position.copy(soleil.position);
 
+    tp = marque("decor", tp);
     const c = e.canvas;
-    if (c && c.clientWidth && (c.clientWidth !== taille[0] || c.clientHeight !== taille[1] || resH !== taille[2])) {
-      taille = [c.clientWidth, c.clientHeight, resH];
-      if (resH > 0) {
+    // (v99) niveau de performance : hauteur d'image plafonnée (les pixels sont étirés par le navigateur)
+    const rH = c && perf.cap > 0 && c.clientHeight * (resH > 0 ? 1 : ratioQ) > perf.cap && (resH <= 0 || resH > perf.cap) ? perf.cap : resH;
+    if (c && c.clientWidth && (c.clientWidth !== taille[0] || c.clientHeight !== taille[1] || rH !== taille[2])) {
+      taille = [c.clientWidth, c.clientHeight, rH];
+      if (rH > 0) {
         renderer.setPixelRatio(1);
-        renderer.setSize(Math.round(resH * taille[0] / taille[1]), resH, false);
+        renderer.setSize(Math.round(rH * taille[0] / taille[1]), rH, false);
       } else {
         renderer.setPixelRatio(ratioQ);
         renderer.setSize(taille[0], taille[1], false);
@@ -6313,13 +6357,18 @@ function definirPeloton(liste) {
       camera.updateProjectionMatrix();
     }
     renderer.render(scene, camera);
+    marque("rendu", tp);
+    PROF.total += (performance.now() - tDebut - PROF.total) * 0.05;
   }
 
   const api = {
     creer: creer,
+    profil: () => Object.fromEntries(Object.entries(PROF).map(([k, v]) => [k, Math.round(v * 100) / 100])),
     dessiner: dessiner, definirRampe: definirRampe, compteRampe: compteRampe,
     definirTheme: (nom) => { if (renderer) appliquerTheme(nom); },
     definirQualite: (q) => { if (renderer) definirQualite(q); },
+    definirPerf: (n) => definirPerf(n),
+    niveauPerf: () => perfN,
     definirAvatar: (g, couleur) => {
       genre = g === "femme" ? "femme" : "homme";
       if (couleur !== undefined && matMaillot) matMaillot.color.set(couleur);
