@@ -4,6 +4,32 @@
    ===================================================================== */
 function valeur(src, cle, ts) { return frais(ts !== undefined ? ts : src.ts) && src[cle] != null ? src[cle] : null; }
 
+/* (v100) Puissance « propre » : à basse cadence (exercices de force sous 50 tr/min) le home trainer ne renouvelle sa puissance
+   qu'à chaque tour de manivelle (toutes les ~1,5 à 2 s à 35 tr/min) : valeurs répétées, puis 0 W alors que la cadence est
+   encore là (sortie du 22/11/2026 : 15 % d'échantillons répétés, 0 W avec 88 ou 34 tr/min). La vitesse virtuelle suivait chaque trou.
+   (1) trou = 0 W alors que la cadence est ≥ 15 tr/min : on garde la dernière puissance pendant 3,5 s au plus (au-delà : vrai arrêt) ;
+   (2) la vitesse est calculée sur une moyenne lissée (3 s en ERG ou sous 55 tr/min, 1 s sinon, 0,5 s à l'arrêt). L'affichage et
+   le .FIT gardent la puissance corrigée du (1), sans le lissage du (2). */
+const lissageP = { dernier: 0, zero: 0, vit: 0, trous: 0, a: null };
+function conditionnerPuissance(brute, cadence, ecoule, erg) {
+  const L = lissageP;
+  if (brute === null) { L.zero = 0; L.vit = 0; L.dernier = 0; return { corr: null, vit: 0 }; }
+  let corr = brute;
+  const pedale = cadence !== null && cadence >= 15;
+  if (brute < 5 && pedale && L.dernier >= 20) {
+    L.zero += ecoule;
+    if (L.zero <= 3.5) { corr = L.dernier; L.trous += ecoule; }
+  } else {
+    L.zero = 0;
+    if (brute >= 5) L.dernier = brute;
+    else if (!pedale) L.dernier = 0;
+  }
+  const arret = corr < 5 && !pedale;
+  const tau = arret ? 0.5 : (erg || (cadence !== null && cadence < 55)) ? 3 : 1;
+  L.vit += (corr - L.vit) * (1 - Math.exp(-ecoule / tau));
+  return { corr, vit: Math.max(0, L.vit) };
+}
+
 function marquerZone(elTag, zones, ratio, actif) {
   if (!actif) { elTag.textContent = ""; return; }
   const z = zones[indexZone(zones, ratio)];
@@ -51,8 +77,10 @@ function rafraichir() {
   balade.tick = t;
 
   const pPm = valeur(pm, "power"), pTr = valeur(trainer, "power");
-  const puissance = pPm !== null ? pPm : pTr;
+  const pBrute = pPm !== null ? pPm : pTr;
   const cadence = valeur(pm, "cadence", pm.cadTs) !== null ? pm.cadence : valeur(trainer, "cadence");
+  const pc = conditionnerPuissance(pBrute, cadence, ecoule, modeActuel() === "erg");      // (v100) trous de mesure à basse cadence comblés, vitesse lissée
+  const puissance = pc.corr;
   const fc = valeur(ceinture, "hr") !== null ? ceinture.hr : (valeur(trainer, "hr") > 0 ? trainer.hr : null);
   balade.cadence = cadence;
   balade.ratio = puissance !== null ? puissance / ftp() : 0;
@@ -92,7 +120,7 @@ function rafraichir() {
   if (balade.enCours) {
     for (let k = 0; k < nPas; k++) {
       majConditionsAir(dt);
-      avancer(dt, puissance || 0, penteMonde());
+      avancer(dt, pc.vit, penteMonde());
       statsAero.s += condAir.gainW; statsAero.n++;
       if (Peloton.actif()) Peloton.maj(dt, { d: balade.distance, v: balade.vitesse, enCours: true });
       if (!route.boucle && balade.distance >= route.longueur) break;
