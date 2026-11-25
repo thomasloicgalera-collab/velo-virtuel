@@ -2,7 +2,9 @@
 /* (v76) « Mon garage » : la page Personnalisation en grille de catégories (cadre, roues, moi, cheveux, tête, lunettes, maillot, cuissard,
    chaussettes) ; chaque catégorie ouvre une liste de cartes (vignette, nom, étoiles aéro / poids pour le matériel) ou de pastilles de couleur.
    Rien n'est stocké ici : tout passe par les réglages d'avant (selects et cases de #perso-avatar et #perso-velo, gardés cachés),
-   donc la sauvegarde, la sortie de groupe et l'aperçu 3D marchent comme avant. */
+   donc la sauvegarde, la sortie de groupe et l'aperçu 3D marchent comme avant.
+   (v101) Cadre et Roues en mosaïque avec de vraies miniatures 3D ; le matériel pas encore débloqué porte un cadenas et le niveau requis
+   (js/deblocage.js) : un clic explique ce qu'il manque, sans rien changer. */
 const Garage = (function () {
   const $g = (id) => document.getElementById(id);
   const racine = $g("garage");
@@ -22,7 +24,7 @@ const Garage = (function () {
 
   /* ---------- vignettes dessinées en SVG ---------- */
   const COUL_VELO = { mystero: "#2ab7a9", v5rs: "#e8e8ee", y1rs: "#f1f1f1", melee: "#2a2d33", dogma: "#d42b2b", foil: "#9096a0", madone: "#f6f6f6", simple: "#5b8def",
-    plasma: "#f4f6f4", speed: "#7a46b8", triton: "#26211e", tritonb: "#8fc9ee" };
+    plasma: "#f4f6f4", speed: "#7a46b8", triton: "#26211e", tritonb: "#8fc9ee", c68: "#eceded", bmc: "#4a4c51", noah: "#c2951c", addict: "#2f9c82" };
   function svgVelo(id) {
     const c = COUL_VELO[id] || "#888", p = PERF_VELOS[id], clm = !!(p && p.clm);
     const tr = (d, col, w) => '<path d="' + d + '" stroke="' + col + '" stroke-width="' + w + '" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
@@ -33,7 +35,7 @@ const Garage = (function () {
       tr("M40,19 L50,19 M82,24 L84,17 L92,18", "#20242b", 3.2) + (clm ? tr("M84,19 L104,21", "#20242b", 3) : "") + "</svg>";
   }
   function svgRoue(r) {
-    const ep = { "35": 4, "45": 6, "50": 7, "65": 10, disque: 10 }[r] || 5;
+    const ep = { "35": 4, "45": 6, "50": 7, "65": 10, disque: 10 }[r] || 7;
     let sp = ""; for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8; sp += '<line x1="40" y1="40" x2="' + (40 + 31 * Math.cos(a)).toFixed(1) + '" y2="' + (40 + 31 * Math.sin(a)).toFixed(1) + '"/>'; }
     return '<svg viewBox="0 0 80 80" aria-hidden="true">' + (r === "disque" ? '<circle cx="40" cy="40" r="34" fill="#3a3f48"/><circle cx="40" cy="40" r="26" fill="#575d68"/>' : '<g stroke="#8a919c" stroke-width=".8">' + sp + "</g>") +
       '<circle cx="40" cy="40" r="' + (37 - ep / 2) + '" fill="none" stroke="#23272e" stroke-width="' + ep + '"/><circle cx="40" cy="40" r="3.5" fill="#c5cad2"/></svg>';
@@ -76,10 +78,19 @@ const Garage = (function () {
   const icone = (k) => '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICO[k] + "</svg>";
 
   /* ---------- briques ---------- */
-  const cacheVign = {};                         // vignettes 3D des vélos (images), faites une fois à l'ouverture de Cadre
-  const carte = (o) => '<button type="button" class="g-carte' + (o.actif ? " actif" : "") + '" data-a="' + o.a + '" data-id="' + (o.id || "") + '" data-v="' + esc(o.v) + '">' +
-    (o.actif ? '<span class="g-coche" aria-hidden="true">✓</span>' : "") + '<span class="g-vign"' + (o.vel ? ' data-vel="' + o.vel + '"' : "") + ">" + o.vign + '</span><span class="g-txt"><b>' + esc(o.nom) + "</b>" + (o.sous ? "<em>" + esc(o.sous) + "</em>" : "") +
+  const cacheVign = {}, cacheRoue = {};         // vignettes 3D des vélos et des roues (images), faites une fois à l'ouverture de la liste
+  let filtreRoues = "toutes", message = "", minuteur = 0;
+  const carte = (o) => '<button type="button" class="g-carte' + (o.actif ? " actif" : "") + (o.verrou ? " verrou" : "") + '" data-a="' + o.a + '" data-id="' + (o.id || "") + '" data-v="' + esc(o.v) + '"' + (o.verrou ? ' aria-disabled="true"' : "") + ">" +
+    (o.actif ? '<span class="g-coche" aria-hidden="true">✓</span>' : "") + '<span class="g-vign"' + (o.vel ? ' data-vel="' + o.vel + '"' : "") + (o.rou ? ' data-rou="' + o.rou + '"' : "") + '><span class="g-img">' + o.vign + "</span>" +
+    (o.verrou ? '<span class="g-cadenas">🔒 Niveau ' + o.verrou + "</span>" : "") + '</span><span class="g-txt"><b>' + esc(o.nom) + "</b>" + (o.sous ? "<em>" + esc(o.sous) + "</em>" : "") +
     (o.gains ? gainsHtml(o.gains) : "") + "</span></button>";
+  // (v101) carte d'un vélo ou d'une paire de roues : verrouillée tant que le niveau n'est pas atteint
+  const kg = (m) => m.toFixed(2).replace(/0$/, "").replace(".", ",") + " kg";
+  function carteMateriel(liste, o, extra) {
+    const libre = Deblocage.ouvert(liste, o.v), n = Deblocage.requis(liste, o.v);
+    return carte(Object.assign({ a: libre ? "sel" : "verrou", id: liste, v: o.v, actif: val(liste) === o.v, verrou: libre ? 0 : n }, extra,
+      libre ? {} : { sous: "Encore " + Deblocage.xpRestant(n) + " XP" }));
+  }
   const pastille = (a, id, v, actif, nom) => '<button type="button" class="g-pastille' + (actif ? " actif" : "") + '" style="background:' + hex(v) + '" data-a="' + a + '" data-id="' + id + '" data-v="' + v + '" title="' + esc(nom || "") + '" aria-label="' + esc(nom || hex(v)) + '"></button>';
   const puce = (id, v, actif, nom) => '<button type="button" class="g-puce' + (actif ? " actif" : "") + '" data-a="sel" data-id="' + id + '" data-v="' + esc(v) + '">' + esc(nom) + "</button>";
   const titre = (t) => '<div class="g-sous">' + t + "</div>";
@@ -96,8 +107,12 @@ const Garage = (function () {
     const ligne = (nom, w, max) => '<span class="g-gain"><span class="g-gl">' + nom + '</span><span class="g-barre"><i style="width:' + Math.round(clamp(Math.sqrt(Math.max(0, w) / max), 0, 1) * 100) + '%"></i></span><b class="' + (Math.round(w) < 0 ? "neg" : Math.round(w) > 0 ? "pos" : "") + '">' + fmtW(w) + "</b></span>";
     return '<span class="g-gains">' + ligne("Plat · 40 km/h", g.plat, 70) + ligne("Montée · 7 %", g.mont, 12) + "</span>";
   }
-  const SOUS_ROUES = { "35": "Légères, idéales en montagne", "45": "Polyvalentes", "50": "Rapides et stables", "65": "Très aéro, plus lourdes", disque: "Lenticulaire : le plus rapide sur le plat" };
-  const SOUS_VELO = { simple: "Vélo de base", mystero: "Bleu-vert", v5rs: "Grimpeur léger", y1rs: "Aéro et rapide", melee: "Noir mat", dogma: "Rouge", foil: "Aéro", madone: "Blanc", plasma: "Blanc et vert", speed: "Violet", triton: "Noir et cuivre", tritonb: "Bleu clair" };
+  const SOUS_ROUES = { "35": "Légères, idéales en montagne", "45": "Polyvalentes", "50": "Rapides et stables", "65": "Très aéro, plus lourdes", disque: "Lenticulaire : le plus rapide sur le plat",
+    bora35: "35 mm · rayons groupés par trois", enve40: "40 mm · trois repères blancs", shamal: "Vagues de 40 à 45 mm", corima45: "45 mm · 20 rayons croisés", cosmic45: "45 mm · décor gris",
+    comete45: "45 mm · rayons plats gris", comete50: "50 mm · décor blanc", streem45: "50 mm · 15 rayons", lw_ob: "48 mm · carbone tissé, très légères", duraace: "50 mm · rayons argentés",
+    mavic52: "52 mm · grand décor argent", zipp404: "54 mm · grises et blanches", streem60: "60 mm · très profondes", sharq: "24 vagues, de 57 à 62 mm", wake6560: "Grandes vagues, de 60 à 65 mm" };
+  const SOUS_VELO = { simple: "Vélo de base", mystero: "Bleu-vert", v5rs: "Grimpeur léger", y1rs: "Aéro et rapide", melee: "Noir mat", dogma: "Rouge", foil: "Aéro", madone: "Blanc", plasma: "Blanc et vert", speed: "Violet", triton: "Noir et cuivre", tritonb: "Bleu clair",
+    addict: "Le plus léger, pour la montagne", noah: "Très aéro, noir et or", c68: "Classique italien", bmc: "Aéro et assez léger" };
   const CASQUES = [["classique", "Route classique", "Fentes d’aération, tout-terrain"], ["aero", "Aéro", "Grandes aérations latérales"], ["evade", "Route lisse", "Rainures et longue queue"], ["ventile", "Ventilé", "Fentes et bande noire"], ["chrono", "Contre-la-montre", "Queue longue et visière"]];
   const VERRES_T = { orange: "Miroir orange", bleu: "Miroir bleu", violet: "Miroir violet", fume: "Fumés" };
 
@@ -117,19 +132,30 @@ const Garage = (function () {
 
   const contenu = {
     cadre() {
-      let h = "", g = null;
-      for (const o of opts("avatar-velo")) {
-        const p = PERF_VELOS[o.v] || PERF_VELOS.simple;
-        if (o.g !== g) { g = o.g; h += titre(g || "Vélos"); }
-        const [nom] = nomEt(o.t);
-        h += carte({ a: "sel", id: "avatar-velo", v: o.v, actif: val("avatar-velo") === o.v, vel: o.v, vign: cacheVign[o.v] ? '<img alt="" src="' + cacheVign[o.v] + '">' : svgVelo(o.v), nom, sous: SOUS_VELO[o.v] || "", gains: gainsDe(p.aero, p.masse, PERF_VELOS.simple.masse) });
-      }
-      return h + '<div class="g-fiche" id="g-fiche"></div>';
+      const liste = opts("avatar-velo"), groupes = [...new Set(liste.map((o) => o.g))];
+      let h = '<div class="g-fiche" id="g-fiche"></div>';
+      for (const g of groupes) h += titre(g || "Vélos") + '<div class="g-mosaique">' + liste.filter((o) => o.g === g).map((o) => {
+        const p = PERF_VELOS[o.v] || PERF_VELOS.simple, [nom] = nomEt(o.t);
+        return carteMateriel("avatar-velo", o, { vel: o.v, vign: cacheVign[o.v] ? '<img alt="" src="' + cacheVign[o.v] + '">' : svgVelo(o.v), nom,
+          sous: (SOUS_VELO[o.v] || "") + (o.v === "simple" ? "" : " · cadre " + kg(p.masse)), gains: gainsDe(p.aero, p.masse, PERF_VELOS.simple.masse) });
+      }).join("") + "</div>";
+      return h;
     },
     roues() {
-      return opts("avatar-roues").map((o) => { const p = PERF_ROUES[o.v];
-        return carte({ a: "sel", id: "avatar-roues", v: o.v, actif: val("avatar-roues") === o.v, vign: svgRoue(o.v), nom: o.v === "disque" ? "Lenticulaire" : "Jantes " + o.t, sous: SOUS_ROUES[o.v], gains: gainsDe(p.aero, p.masse, PERF_ROUES["35"].masse) }); }).join("") +
-        '<div class="g-fiche" id="g-fiche"></div>';
+      const liste = opts("avatar-roues"), groupes = [...new Set(liste.map((o) => o.g))];
+      const garde = (o) => filtreRoues === "toutes" || (filtreRoues === "libres") === Deblocage.ouvert("avatar-roues", o.v);
+      const verrous = liste.filter((o) => !Deblocage.ouvert("avatar-roues", o.v)).length;
+      let h = '<div class="g-fiche" id="g-fiche"></div><div class="g-filtres">' + [["toutes", "Toutes (" + liste.length + ")"], ["libres", "Disponibles (" + (liste.length - verrous) + ")"], ["verrou", "À débloquer (" + verrous + ")"]]
+        .map((x) => '<button type="button" class="g-puce' + (filtreRoues === x[0] ? " actif" : "") + '" data-a="filtre" data-v="' + x[0] + '">' + x[1] + "</button>").join("") + "</div>";
+      for (const g of groupes) {
+        const l = liste.filter((o) => o.g === g && garde(o));
+        if (!l.length) continue;
+        h += titre(g) + '<div class="g-mosaique g-m-roues">' + l.map((o) => { const p = PERF_ROUES[o.v];
+          return carteMateriel("avatar-roues", o, { rou: o.v, vign: cacheRoue[o.v] ? '<img alt="" src="' + cacheRoue[o.v] + '">' : svgRoue(o.v),
+            nom: o.v === "disque" ? "Lenticulaire" : /^\d+$/.test(o.v) ? "Jantes " + o.t : o.t.replace(/\s*\(.*\)$/, ""), sous: (SOUS_ROUES[o.v] || "") + " · " + kg(p.masse), gains: gainsDe(p.aero, p.masse, PERF_ROUES["35"].masse) }); }).join("") + "</div>";
+      }
+      if (filtreRoues === "verrou" && !verrous) h += '<div class="g-nom">Toutes les roues sont débloquées.</div>';
+      return h;
     },
     moi() {
       return titre("Silhouette") + '<div class="g-puces g-gros">' + puce("sexe", "homme", val("sexe") === "homme", "Homme") + puce("sexe", "femme", val("sexe") === "femme", "Femme") + "</div>" +
@@ -172,21 +198,32 @@ const Garage = (function () {
       return;
     }
     const cat = CATS.find((c) => c[0] === vue);
-    racine.innerHTML = '<div class="g-entete"><button type="button" class="g-retour" data-a="retour" aria-label="Retour au garage">←</button><h3>' + cat[1] + '</h3></div><div class="g-liste">' + contenu[vue]() + "</div>";
-    if (vue === "cadre") vignettes();
+    racine.innerHTML = '<div class="g-entete"><button type="button" class="g-retour" data-a="retour" aria-label="Retour au garage">←</button><h3>' + cat[1] + '</h3></div>' +
+      (message ? '<div class="g-message" role="status">' + esc(message) + "</div>" : "") + '<div class="g-liste">' + contenu[vue]() + "</div>";
+    if (vue === "cadre" || vue === "roues") vignettes(vue);
     if ($g("g-fiche") && fiche) { $g("g-fiche").appendChild(fiche); if (typeof majMateriel === "function") majMateriel(); }
   }
-  function vignettes() {                        // vraies vignettes 3D, une par image pour ne pas figer la page ; les dessins en SVG servent en attendant
+  let tourVign = 0;
+  function vignettes(quoi) {                    // vraies vignettes 3D, une par image pour ne pas figer la page ; les dessins en SVG servent en attendant
     if (typeof monde3d === "undefined" || !monde3d || !monde3d.vignetteVelo) return;
-    const faire = opts("avatar-velo").map((o) => o.v).filter((v) => v !== "simple" && !cacheVign[v]);
+    const roues = quoi === "roues", cache = roues ? cacheRoue : cacheVign;
+    const faire = opts(roues ? "avatar-roues" : "avatar-velo").map((o) => o.v).filter((v) => v !== "simple" && !cache[v]);
+    const mien = ++tourVign;
     const suite = () => {
+      if (mien !== tourVign) return;              // la liste a été redessinée : une seule file à la fois
       const id = faire.shift(); if (!id) return;
-      try { const u = monde3d.vignetteVelo(id, 420, 256); if (u) cacheVign[id] = u; } catch (e) { /* on garde le dessin */ }
-      const z = racine.querySelector('.g-vign[data-vel="' + id + '"]');
-      if (z && cacheVign[id]) z.innerHTML = '<img alt="" src="' + cacheVign[id] + '">';
+      try { const u = roues ? monde3d.vignetteRoue(id, 300) : monde3d.vignetteVelo(id, 420, 256); if (u) cache[id] = u; } catch (e) { console.warn("vignette " + id, e); }
+      const z = racine.querySelector('.g-vign[data-' + (roues ? "rou" : "vel") + '="' + id + '"] .g-img');
+      if (z && cache[id]) z.innerHTML = '<img alt="" src="' + cache[id] + '">';
       setTimeout(suite, 30);
     };
     setTimeout(suite, 50);
+  }
+  function refuser(liste, v) {                  // clic sur un matériel verrouillé : on explique, rien ne change
+    const n = Deblocage.requis(liste, v), o = opts(liste).find((x) => x.v === v);
+    message = "🔒 " + (o ? o.t.replace(/\s*\(.*\)$/, "") : v) + " : se débloque au niveau " + n + " (encore " + Deblocage.xpRestant(n) + " XP). Chaque kilomètre rapporte de l'expérience.";
+    clearTimeout(minuteur);
+    minuteur = setTimeout(() => { message = ""; const m = racine.querySelector(".g-message"); if (m) m.remove(); }, 5000);
   }
   function changer(id, v) { const s = $g(id); s.value = v; s.dispatchEvent(new Event("change")); }
   function cocher(id, on) { const c = $g(id); if (c.checked !== on) { c.checked = on; c.dispatchEvent(new Event("change")); } }
@@ -194,8 +231,16 @@ const Garage = (function () {
   racine.addEventListener("click", (e) => {
     const b = e.target.closest("[data-a]"); if (!b) return;
     const a = b.dataset.a, v = b.dataset.v, id = b.dataset.id;
-    if (a === "ouvrir") { vue = v; apercu(APERCU[v] || false); rendre(); return; }
-    if (a === "retour") { vue = "accueil"; apercu(false); rendre(); return; }
+    if (a === "ouvrir") { vue = v; message = ""; apercu(APERCU[v] || false); rendre(); return; }
+    if (a === "retour") { vue = "accueil"; message = ""; apercu(false); rendre(); return; }
+    if (a === "filtre") { filtreRoues = v; rendre(); return; }
+    if (a === "verrou") {
+      refuser(id, v); rendre();
+      const c = racine.querySelector('.g-carte[data-id="' + id + '"][data-v="' + v + '"]');
+      if (c) c.classList.add("secoue");
+      return;
+    }
+    message = "";
     if (a === "sel") changer(id, v);
     else if (a === "champ") { $g(id).value = v; if (typeof marquerPastilles === "function") marquerPastilles(); appliquerAvatar(); sauverReglages(); }
     else if (a === "casque") { if (v) { changer("avatar-casque-style", v); cocher("avatar-casque", true); } else cocher("avatar-casque", false); }

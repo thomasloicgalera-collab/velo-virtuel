@@ -152,6 +152,8 @@ const RESISTANCE_PLUS = 1.2;   // +20 % de résistance pour tout le monde : home
 const PERF_VELOS = {
   simple: { masse: 6.7, aero: 0 }, mystero: { masse: 5.8, aero: 0.015 }, v5rs: { masse: 5.4, aero: 0.005 }, y1rs: { masse: 6.0, aero: 0.02 },
   melee: { masse: 5.6, aero: 0.01 }, dogma: { masse: 5.5, aero: 0.015 }, foil: { masse: 6.0, aero: 0.015 }, madone: { masse: 5.9, aero: 0.025 },
+  // (v101) quatre vélos de route de plus (certains se débloquent avec les niveaux : js/deblocage.js)
+  addict: { masse: 5.3, aero: 0.004 }, c68: { masse: 5.75, aero: 0.008 }, noah: { masse: 6.05, aero: 0.028 }, bmc: { masse: 5.75, aero: 0.027 },
   // contre-la-montre : le gain d'air comprend la position allongée sur les prolongateurs (≈ 20 % de traînée en moins), mais le vélo est plus lourd
   plasma: { masse: 7.6, aero: 0.20, clm: true }, speed: { masse: 7.5, aero: 0.205, clm: true }, triton: { masse: 7.4, aero: 0.20, clm: true }, tritonb: { masse: 7.4, aero: 0.20, clm: true }
 };
@@ -159,7 +161,12 @@ const PERF_VELOS = {
 // il perd l'essentiel du gain d'air de la position chrono et profite moins bien de l'abri des autres (vélo nerveux, moins bien placé dans les roues)
 const GROUPE_DIST = 12, MALUS_CLM_AIR = 0.8, MALUS_CLM_ABRI = 0.5;
 const PERF_ROUES = { "35": { masse: 1.30, aero: 0 }, "45": { masse: 1.40, aero: 0.01 }, "50": { masse: 1.45, aero: 0.015 }, "65": { masse: 1.60, aero: 0.025 },
-  disque: { masse: 1.95, aero: 0.035 } };   // disque : avant de 65 mm, arrière lenticulaire
+  disque: { masse: 1.95, aero: 0.035 },     // disque : avant de 65 mm, arrière lenticulaire
+  // (v101) 15 paires d'après les photos : poids proches des fiches des fabricants (pour la paire), gain d'air estimé d'après la hauteur et la forme
+  bora35: { masse: 1.37, aero: 0.006 }, enve40: { masse: 1.48, aero: 0.008 }, shamal: { masse: 1.46, aero: 0.012 },
+  corima45: { masse: 1.40, aero: 0.011 }, cosmic45: { masse: 1.50, aero: 0.010 }, comete45: { masse: 1.42, aero: 0.011 }, lw_ob: { masse: 1.23, aero: 0.013 },
+  streem45: { masse: 1.42, aero: 0.014 }, comete50: { masse: 1.46, aero: 0.015 }, duraace: { masse: 1.43, aero: 0.016 }, mavic52: { masse: 1.58, aero: 0.016 },
+  zipp404: { masse: 1.53, aero: 0.021 }, streem60: { masse: 1.52, aero: 0.022 }, sharq: { masse: 1.52, aero: 0.023 }, wake6560: { masse: 1.45, aero: 0.027 } };
 function materielVelo(velo, roues) {
   const v = PERF_VELOS[velo] || PERF_VELOS.simple, r = PERF_ROUES[roues] || PERF_ROUES["35"];
   return { masse: v.masse + r.masse, aero: v.aero + r.aero, clm: !!v.clm };
@@ -271,12 +278,16 @@ const Peloton = (function () {
   const finDe = (r) => fmtHook && fmtHook.fin ? fmtHook.fin(r) : d0 + longueurCourse();   // aller simple : arrivée au bout du parcours, même avec un départ en cours de route
   // vélos des coureurs virtuels : même catégorie que celui de l'utilisateur (route ou contre-la-montre, suivie en direct),
   // modèle et roues choisis selon leur profil (poids et gain d'air de PERF_VELOS / PERF_ROUES, comme pour l'utilisateur)
+  // (v101) sur route, plusieurs montages par profil (le premier est celui d'avant) : le coureur garde le sien, tiré d'après son allure (r.look)
   const VELOS_IA = {
-    route: { grimpeur: ["v5rs", "35"], sprinteur: ["foil", "65"], baroudeur: ["madone", "50"], puncheur: ["dogma", "45"] },
-    clm: { grimpeur: ["triton", "65"], sprinteur: ["speed", "disque"], baroudeur: ["plasma", "65"], puncheur: ["tritonb", "65"] }
+    route: { grimpeur: [["v5rs", "35"], ["addict", "bora35"], ["v5rs", "corima45"], ["addict", "lw_ob"], ["c68", "shamal"]],
+             sprinteur: [["foil", "65"], ["noah", "streem60"], ["bmc", "sharq"], ["foil", "zipp404"], ["noah", "mavic52"]],
+             baroudeur: [["madone", "50"], ["c68", "duraace"], ["bmc", "wake6560"], ["madone", "comete50"], ["c68", "cosmic45"]],
+             puncheur: [["dogma", "45"], ["addict", "comete45"], ["noah", "enve40"], ["dogma", "streem45"]] },
+    clm: { grimpeur: [["triton", "65"]], sprinteur: [["speed", "disque"]], baroudeur: [["plasma", "65"]], puncheur: [["tritonb", "65"]] }
   };
   function veloIA(r) {
-    const clm = !!(Aero.reg && Aero.reg.clm), v = VELOS_IA[clm ? "clm" : "route"][r.id] || ["simple", "35"], m = materielVelo(v[0], v[1]);
+    const clm = !!(Aero.reg && Aero.reg.clm), l = VELOS_IA[clm ? "clm" : "route"][r.id] || [["simple", "35"]], v = l[(r.look >>> 4 || 0) % l.length], m = materielVelo(v[0], v[1]);
     r.clm = clm; r.velo = v[0]; r.roues = v[1]; r.masseVelo = m.masse; r.aeroVelo = m.aero;
   }
   // (v69 suite) coureurs tirés au hasard : profil, nom, femme ou homme, allure, maillot, x = place dans la fourchette du niveau (0 à 1) ;

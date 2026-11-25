@@ -3580,7 +3580,8 @@ function definirPeloton(liste) {
 }
   // dRef : distance affichée du cycliste ; les écarts avec l'utilisateur sont conservés tels quels
   // couleur principale des modèles de vélo des coureurs virtuels (d'après les vélos détaillés de js/velos.js)
-  const COUL_VELO_IA = { v5rs: 0xe9ebee, foil: 0x6e7175, madone: 0xe6e2d6, dogma: 0xb3141a, plasma: 0xdfe6e8, speed: 0x6640c8, triton: 0x1d1e21, tritonb: 0x84d4ca };
+  const COUL_VELO_IA = { v5rs: 0xe9ebee, foil: 0x6e7175, madone: 0xe6e2d6, dogma: 0xb3141a, plasma: 0xdfe6e8, speed: 0x6640c8, triton: 0x1d1e21, tritonb: 0x84d4ca,
+    c68: 0xd9dadb, bmc: 0x45474b, noah: 0x5a4410, addict: 0xdfe3e4 };
   function majIA(e, dt, dRef) {
     const L = e.peloton || [];
     // (v99) seuls les `perf.reel` coureurs les plus proches (le long de la route) ont le corps réaliste, les autres sont simplifiés
@@ -3708,7 +3709,41 @@ function definirPeloton(liste) {
     }
     return geosVelo[k];
   }
-  const BRILLANCE_V = { metal: [80, 0x666666], carbone: [45, 0x333333], pneu: [4, 0x080808], flanc: [6, 0x101010], noir: [30, 0x2a2a2a], guidoline: [3, 0x080808], selle: [18, 0x222222], tige: [40, 0x333333] };
+  // (v101) forme d'une pièce : couleurs par sommet (p.c) et répétition autour de l'axe (p.rep : le fichier ne contient qu'une vague de jante) ;
+  // gardée en mémoire : la même forme sert à ton vélo et à tous les coureurs virtuels
+  const geosPieces = new Map();
+  function geoPiece(p) {
+    const rep = p.rep || 1;
+    if (!p.c && rep === 1) return geoVelo(p.geo);
+    let g = geosPieces.get(p);
+    if (g) return g;
+    const base = geoVelo(p.geo), c8 = p.c ? new Uint8Array(binV(p.c)) : null;
+    g = new T.BufferGeometry();
+    if (rep === 1) {
+      g.setAttribute("position", base.attributes.position); g.setAttribute("normal", base.attributes.normal); g.setIndex(base.index);
+      if (c8) g.setAttribute("color", new T.BufferAttribute(c8, 3, true));
+    } else {
+      const P = base.attributes.position.array, N = base.attributes.normal.array, I = base.index.array, n = P.length / 3;
+      const P2 = new Float32Array(P.length * rep), N2 = new Int8Array(N.length * rep), I2 = n * rep > 65535 ? new Uint32Array(I.length * rep) : new Uint16Array(I.length * rep);
+      const C2 = c8 ? new Uint8Array(c8.length * rep) : null;
+      for (let k = 0; k < rep; k++) {
+        const a = 2 * Math.PI * k / rep, ca = Math.cos(a), sa = Math.sin(a), o = k * P.length;
+        for (let i = 0; i < P.length; i += 3) {
+          P2[o + i] = P[i]; P2[o + i + 1] = P[i + 1] * ca - P[i + 2] * sa; P2[o + i + 2] = P[i + 1] * sa + P[i + 2] * ca;
+          // bornées à ±127 : un arrondi à 128 s'inverserait (point noir sur la jante)
+          N2[o + i] = N[i]; N2[o + i + 1] = Math.max(-127, Math.min(127, Math.round(N[i + 1] * ca - N[i + 2] * sa))); N2[o + i + 2] = Math.max(-127, Math.min(127, Math.round(N[i + 1] * sa + N[i + 2] * ca)));
+        }
+        for (let i = 0; i < I.length; i++) I2[k * I.length + i] = I[i] + k * n;
+        if (C2) C2.set(c8, k * c8.length);
+      }
+      g.setAttribute("position", new T.BufferAttribute(P2, 3)); g.setAttribute("normal", new T.BufferAttribute(N2, 3, true)); g.setIndex(new T.BufferAttribute(I2, 1));
+      if (C2) g.setAttribute("color", new T.BufferAttribute(C2, 3, true));
+    }
+    geosPieces.set(p, g);
+    return g;
+  }
+  const BRILLANCE_V = { metal: [80, 0x666666], carbone: [45, 0x333333], pneu: [4, 0x080808], flanc: [6, 0x101010], noir: [30, 0x2a2a2a], guidoline: [3, 0x080808], selle: [18, 0x222222], tige: [40, 0x333333],
+    mat: [14, 0x161616], brillant_roue: [62, 0x3a3a3a], decal: [26, 0x1c1c1c], rayon: [34, 0x2c2c2c], moyeu: [40, 0x303030] };   // (v101) roues nouvelles
   function construireVelo(id) {
     if (velosFaits[id] !== undefined) return velosFaits[id];
     const vd = fabriquerVelo(id);
@@ -3726,11 +3761,10 @@ function definirPeloton(liste) {
     for (const p of VELOS.pieces) {
       if (p.roue || (p.selle ? p.selle !== def.selle : p.velo ? p.velo !== id : false)) continue;     // les roues sont construites à part (construireRoues)
       if (p.clm ? !def.clm : def.clm && p.g === "cintre") continue;   // chrono : manchettes et prolongateurs (socle, ext) au lieu du cintre de route
-      let geo = geoVelo(p.geo), mat;
+      const geo = geoPiece(p);
+      let mat;
       if (p.c) {                     // cadre peint : couleurs par sommet propres à ce vélo (la forme peut être partagée)
-        const c8 = new Uint8Array(binV(p.c)), g2 = new T.BufferGeometry();
-        g2.setAttribute("position", geo.attributes.position); g2.setAttribute("normal", geo.attributes.normal); g2.setIndex(geo.index);
-        g2.setAttribute("color", new T.BufferAttribute(c8, 3, true)); geo = g2;
+        const c8 = geo.attributes.color.array;
         let r = 0, g = 0, b = 0; for (let i = 0; i < c8.length; i += 3) { r += c8[i]; g += c8[i + 1]; b += c8[i + 2]; }
         const n = c8.length / 3 * 255; teinte = new T.Color(r / n, g / n, b / n);
         mat = new T.MeshPhongMaterial({ vertexColors: true, shininess: def.brillant, specular: def.brillant > 40 ? 0x5a5a5a : 0x1c1c1c });
@@ -3749,7 +3783,8 @@ function definirPeloton(liste) {
     potence.castShadow = true;
     return { def, G, pedales, potence, tous: [G.cadre, G.pedalier, G.selle, G.cintre, G.socle, G.ext, pedales[0], pedales[1], potence] };
   }
-  // roues détaillées (35, 45, 50 ou 65 mm), montables sur tous les vélos : rangées dans les groupes roueAv / roueAr qui tournent
+  // roues détaillées (génériques de 35 à 65 mm, lenticulaire, et les 15 paires de la v101), montables sur tous les vélos :
+  // rangées dans les groupes roueAv / roueAr qui tournent
   const rouesFaites = {};
   function construireRoues(rid) {
     if (rouesFaites[rid] !== undefined) return rouesFaites[rid];
@@ -3762,10 +3797,16 @@ function definirPeloton(liste) {
     const R = { av: new T.Group(), ar: new T.Group(), flancs: [] };
     for (const p of VELOS.pieces) {
       if (p.roue !== rid) continue;
-      const b = BRILLANCE_V[p.m] || [30, 0x222222], mat = new T.MeshPhongMaterial({ color: new T.Color(p.k[0], p.k[1], p.k[2]), shininess: b[0], specular: b[1] });
+      const b = BRILLANCE_V[p.m] || [30, 0x222222];
+      const mat = new T.MeshPhongMaterial(p.c ? { vertexColors: true, shininess: b[0], specular: b[1] }
+        : { color: new T.Color(p.k[0], p.k[1], p.k[2]), shininess: b[0], specular: b[1] });
       if (p.m === "flanc") R.flancs.push(mat);                        // flancs des pneus : couleur donnée par le vélo (beige pour le Madone)
-      const m = new T.Mesh(geoVelo(p.geo), mat); m.castShadow = true;
-      (p.g === "roueAv" ? R.av : R.ar).add(m);
+      const geo = geoPiece(p);
+      // (v101) « roues » : jante, décor, rayons et moyeu identiques à l'avant et à l'arrière (même forme pour les deux)
+      for (const cible of p.g === "roues" ? [R.av, R.ar] : [p.g === "roueAv" ? R.av : R.ar]) {
+        const m = new T.Mesh(geo, mat); m.castShadow = p.m !== "decal" && p.m !== "moyeu"; m.userData.matiere = p.m;
+        cible.add(m);
+      }
     }
     R.av.visible = R.ar.visible = false; R.av.userData.detaille = R.ar.userData.detaille = true;
     return R;
@@ -6114,13 +6155,44 @@ function definirPeloton(liste) {
   let rendApercu = null, camApercu = null, lumApercu = null, derniereImage3D = 0;
   /* (v76) vignette d'un vélo pour « Mon garage » : le vrai modèle 3D, vu de côté, sans le cycliste, rendu dans une image (PNG transparent).
      Calque 2 (le calque 1 sert à l'aperçu) : lumières et caméra propres, sans gêner l'aperçu. Rendu synchrone : à appeler un vélo à la fois. */
-  let rendVign = null, camVign = null;
+  let rendVign = null, camVign = null, sceneRoue = null, camRoue = null;
+  function creerRenduVignettes() {
+    if (rendVign) return;
+    rendVign = new T.WebGLRenderer({ canvas: document.createElement("canvas"), antialias: true, alpha: true, preserveDrawingBuffer: true });
+    if (T.sRGBEncoding) rendVign.outputEncoding = T.sRGBEncoding;
+    rendVign.setClearColor(0x000000, 0);
+  }
+  /* (v101) vignette d'une paire de roues : la roue avant en 3D (jante, décor, rayons, moyeu), sans pneu comme sur les photos, vue de côté,
+     dans une scène à part (la lenticulaire montre sa roue arrière, la seule qui soit pleine) */
+  function vignetteRoue(rid, cote) {
+    if (!renderer || typeof VELOS === "undefined") return null;
+    const R = fabriquerRoues(rid);
+    if (!R) return null;
+    creerRenduVignettes();
+    if (!sceneRoue) {
+      sceneRoue = new T.Scene();
+      camRoue = new T.OrthographicCamera(-0.322, 0.322, 0.322, -0.322, 0.05, 10);
+      camRoue.position.set(3, 0, 0); camRoue.lookAt(0, 0, 0);
+      const hl = new T.HemisphereLight(0xeaf2ff, 0x5a5046, 0.95), dl = new T.DirectionalLight(0xfff4e6, 0.9), dl2 = new T.DirectionalLight(0xbfd4ff, 0.4);
+      dl.position.set(2.4, 2.6, -1.2); dl2.position.set(1.6, -0.6, 2.2);
+      sceneRoue.add(hl, dl, dl2);
+    }
+    const montree = rid === "disque" ? R.ar : R.av;
+    montree.visible = true;
+    // sans pneu ni disque de frein, comme sur les photos des roues
+    montree.traverse((o) => { if (["metal", "flanc", "pneu"].includes(o.userData.matiere)) o.visible = false; });
+    sceneRoue.add(montree);
+    rendVign.setPixelRatio(1); rendVign.setSize(cote, cote, false);
+    rendVign.render(sceneRoue, camRoue);
+    const url = rendVign.domElement.toDataURL("image/png");
+    sceneRoue.remove(montree);
+    for (const g of [R.av, R.ar]) g.traverse((o) => { if (o.isMesh) o.material.dispose(); });
+    return url;
+  }
   function vignetteVelo(id, w, h) {
     if (!renderer || !cycliste || !corps.modeleH || typeof VELOS === "undefined") return null;
-    if (!rendVign) {
-      rendVign = new T.WebGLRenderer({ canvas: document.createElement("canvas"), antialias: true, alpha: true, preserveDrawingBuffer: true });
-      if (T.sRGBEncoding) rendVign.outputEncoding = T.sRGBEncoding;
-      rendVign.setClearColor(0x000000, 0);
+    if (!camVign) {
+      creerRenduVignettes();
       camVign = new T.PerspectiveCamera(27, 1, 0.05, 30); camVign.layers.set(2);
       const hl = new T.HemisphereLight(0xeaf2ff, 0x4a4036, 0.9), dl = new T.DirectionalLight(0xfff4e6, 0.95), dl2 = new T.DirectionalLight(0xbfd4ff, 0.45);
       for (const l of [hl, dl, dl2]) { l.layers.set(2); scene.add(l); }
@@ -6385,7 +6457,7 @@ function definirPeloton(liste) {
       if (o.basStyle === "long" || o.basStyle === "cuissard") apparence.basStyle = o.basStyle;
       if (["court", "rase", "mi-long", "degarni", "chignon", "queue", "chauve"].includes(o.coiffure)) apparence.coiffure = o.coiffure;
       if (typeof o.velo === "string") apparence.velo = o.velo;                // vélo détaillé (js/velos.js) ou « simple »
-      if (["35", "45", "50", "65", "disque"].includes(o.roues)) apparence.roues = o.roues;   // profil des jantes (disque : arrière lenticulaire)
+      if (typeof o.roues === "string" && typeof VELOS !== "undefined" && VELOS.pieces.some((p) => p.roue === o.roues)) apparence.roues = o.roues;   // roues (disque : arrière lenticulaire)
       if (BARBES[o.barbe] !== undefined) apparence.barbe = o.barbe;
       if (o.chaussettes !== undefined && isFinite(o.chaussettes)) apparence.chaussettes = o.chaussettes | 0;
       if (o.yeux === "marron" || IRIS[o.yeux]) apparence.yeux = o.yeux;
@@ -6415,7 +6487,7 @@ function definirPeloton(liste) {
     definirIntro: () => { introT = 0; },
     definirVue: (v) => { if (VUES[v]) vue = v; },
     apercu: (cv, ang, veloSeul) => apercuAvatar(cv, ang, veloSeul),
-    vignetteVelo,
+    vignetteVelo, vignetteRoue,
     definirEffets: (o) => { if (o && o.pietons !== undefined) pietonsNiveau = o.pietons | 0; if (o && o.poussiere !== undefined) poussOn = !!o.poussiere; if (o && o.foule !== undefined) { fouleNiveau = o.foule | 0; fouleCle = ""; } },
     definirMeteo: (m) => { if (renderer) definirMeteo(m); },
     pluie: () => meteoVal.pluie,           // (v69) pour le son : intensité de la pluie (0 à 1) et nombre d’éclairs (le tonnerre suit chaque éclair)

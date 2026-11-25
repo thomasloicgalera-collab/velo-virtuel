@@ -7,6 +7,7 @@
    - Expérience (XP) : gagnée en roulant (distance, dénivelé, segments, courses) ; elle n'est
      ajoutée qu'avec « Terminer et enregistrer » (une sortie abandonnée ne compte pas).
    - Défis : trois par semaine (du lundi au dimanche), tirés d'après le numéro de la semaine.
+   - (v101) Les niveaux débloquent une partie des vélos et des roues (js/deblocage.js).
    ===================================================================== */
 const Progression = (function () {
   const CLE_PROG = "velo_progression_v1", CLE_SEGS = "velo_segments_v1";
@@ -412,7 +413,12 @@ const Progression = (function () {
     ecrireJ(CLE_PROG, prog);
     oublierSortie();
     majPuce();
-    return { xp, gains, avant, apres: niveau(prog.xp), defis, badges, journal };
+    // (v101) matériel débloqué par ce passage de niveau
+    const apres = niveau(prog.xp), deblocages = typeof Deblocage !== "undefined" ? Deblocage.entre(avant.n, apres.n) : [];
+    if (deblocages.length) log("Niveau " + apres.n + " : nouveau matériel débloqué (" + deblocages.map((x) => x.nom).join(", ") + ").");
+    if (typeof Garage !== "undefined" && Garage) Garage.rendre();
+    majAccueil();
+    return { xp, gains, avant, apres, defis, badges, journal, deblocages };
   }
 
   /* =====================================================================
@@ -455,6 +461,7 @@ const Progression = (function () {
       const ok = prog.badges[b.id];
       return '<div class="pg-badge' + (ok ? " ok" : "") + '" title="' + b.desc + '"><i>' + b.ico + "</i><b>" + b.nom + "</b><span>" + (ok ? "Obtenu le " + new Date(ok).toLocaleDateString("fr-FR") : b.desc) + "</span></div>";
     }).join("") + "</div>";
+    h += htmlMateriel();
     const parMonde = {};
     for (const k in records) { const r = records[k]; (parMonde[r.monde] = parMonde[r.monde] || []).push(r); }
     h += "<h3>Records des segments</h3>";
@@ -477,6 +484,15 @@ const Progression = (function () {
     f.querySelectorAll("[data-long]").forEach((b) => { b.onclick = () => { relever(b.dataset.long); fermer(); ouvrir(); }; });
     f.querySelectorAll("[data-long-x]").forEach((b) => { b.onclick = () => { if (confirm("Abandonner ce défi ? Ton avancement sera perdu.")) { abandonnerLong(b.dataset.longX); fermer(); ouvrir(); } }; });
   }
+  /* (v101) matériel qui se débloque avec les niveaux (js/deblocage.js) */
+  function htmlMateriel() {
+    if (typeof Deblocage === "undefined") return "";
+    const l = Deblocage.tout(), nb = l.filter((x) => x.ouvert).length;
+    return "<h3>Matériel à débloquer <small>" + nb + " / " + l.length + '</small></h3><div class="pg-materiel">' + l.map((x) =>
+      '<div class="pg-mat' + (x.ouvert ? " ok" : "") + '"><i>' + (x.ouvert ? "✓" : "🔒") + "</i><b>" + x.nom + "</b><span>" + (x.velo ? "Vélo" : "Roues") + " · niveau " + x.niveau +
+      (x.ouvert ? "" : " · encore " + Deblocage.xpRestant(x.niveau) + " XP") + "</span></div>").join("") + "</div>";
+  }
+  const texteProchain = (p) => p.items.map((x) => (x.velo ? "vélo " : "roues ") + x.nom.replace(/\s*\(.*\)$/, "")).join(", ");
   // partie « Progression » du résumé de fin de sortie
   function htmlResume(g) {
     if (!g) return "";
@@ -484,6 +500,9 @@ const Progression = (function () {
     if (g.apres.n > g.avant.n) h += '<div class="rf-niveau">Niveau supérieur ! Tu passes au niveau ' + g.apres.n + ".</div>";
     h += '<div class="rf-gains">' + g.gains.filter((x) => x[1] > 0).map((x) => "<span>" + x[0] + " <b>+" + x[1] + "</b></span>").join("") + "</div>";
     for (const b of g.badges) h += '<div class="rf-badge"><i>' + b.ico + "</i><b>Nouveau badge : " + b.nom + "</b><span>" + b.desc + "</span></div>";
+    for (const x of g.deblocages || []) h += '<div class="rf-badge rf-debloque"><i>🔓</i><b>Débloqué : ' + x.nom + "</b><span>" + (x.velo ? "Nouveau vélo" : "Nouvelles roues") + " (niveau " + x.niveau + "), à choisir dans Mon garage</span></div>";
+    const pr = typeof Deblocage !== "undefined" ? Deblocage.prochain() : null;
+    if (pr) h += '<div class="rf-prochain">Prochain déblocage au niveau ' + pr.niveau + " (encore " + pr.xp + " XP) : " + texteProchain(pr) + "</div>";
     h += "</div>";
     if (g.journal.length) {
       h += "<h3 style=\"margin:6px 0\">Segments</h3>";
@@ -502,6 +521,8 @@ const Progression = (function () {
     const nbB = BADGES.filter((b) => prog.badges[b.id]).length;
     let h = '<div class="ap-tete"><div class="pg-rond"><span>Niveau</span><b>' + nv.n + '</b></div><div class="ap-niv"><b>' + nv.titre + "</b>" +
       barre(nv.frac) + '<span class="pg-petit">' + (nv.n >= 50 ? "Niveau maximum" : Math.round(nv.dans) + " / " + nv.besoin + " XP · encore <b>" + reste + " XP</b> pour le niveau " + (nv.n + 1)) + "</span></div></div>";
+    const pr = typeof Deblocage !== "undefined" ? Deblocage.prochain() : null;
+    if (pr) h += '<div class="ap-debloque">🔒 Niveau ' + pr.niveau + " : " + texteProchain(pr) + "</div>";
     h += '<div class="ap-titre"><span>Bonus de la semaine</span>' + (bonus ? "<em>+" + bonus + " XP à gagner</em>" : "<em class=\"ok\">Tout est fait ✓</em>") + "</div>";
     h += '<div class="ap-defis">' + defis.map((d) => '<div class="ap-defi' + (d.fait ? " fait" : "") + '"><div class="ap-dl"><span>' + (d.fait ? "✓ " : "") + d.txt + "</span><i>+" + d.xp + " XP</i></div>" + barre(d.v / d.n, d.fait ? "#4FD69C" : null) + "</div>").join("") + "</div>";
     if (longs.length) h += '<div class="ap-titre ap-long"><span>Défis au long cours</span></div><div class="ap-defis ap-long">' + longs.map((d) => '<div class="ap-defi"><div class="ap-dl"><span>' + d.ico + " " + d.nom + " · " + d.jr + ' j</span><i>+' + d.xp + " XP</i></div>" + barre(d.v / d.n, "#FFB627") + "</div>").join("") + "</div>";
@@ -516,5 +537,5 @@ const Progression = (function () {
   const lienA = document.getElementById("accueil-prog");
   if (lienA) lienA.addEventListener("click", ouvrir);
 
-  return { records: () => records, maj, terminer, oublierSortie, fantome, profil, htmlResume, ouvrir, majAccueil, segments: () => seg.liste, segmentsRoute, niveau: () => niveau(prog.xp), TYPES_SEG };
+  return { records: () => records, maj, terminer, oublierSortie, fantome, profil, htmlResume, ouvrir, majAccueil, segments: () => seg.liste, segmentsRoute, niveau: () => niveau(prog.xp), xp: () => prog.xp, TYPES_SEG };
 })();

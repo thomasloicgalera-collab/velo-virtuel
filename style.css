@@ -501,6 +501,16 @@
   #resume-fin .rf-gains { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: .8rem; color: #5b6676; } #resume-fin .rf-gains b { color: #1b2430; }
   #resume-fin .rf-badge { display: grid; grid-template-columns: 34px 1fr; margin-top: 8px; align-items: center; }
   #resume-fin .rf-badge i { grid-row: 1 / 3; font-style: normal; font-size: 1.5rem; } #resume-fin .rf-badge span { font-size: .8rem; color: #5b6676; }
+  /* (v101) matériel débloqué avec les niveaux : résumé de fin, accueil, fenêtre Progression */
+  #resume-fin .rf-debloque { border: 2px solid #ff8a3d; border-radius: 10px; background: #fff1e5; padding: 8px 10px; }
+  #resume-fin .rf-debloque b { color: #c94f06; }
+  #resume-fin .rf-prochain { margin-top: 8px; font-size: .8rem; color: #5b6676; }
+  .accueil-prog .ap-debloque { margin-top: 9px; font-size: .8rem; line-height: 1.35; color: #ffd9a8; background: rgba(255,138,61,.12); border: 1px solid rgba(255,138,61,.3); border-radius: 9px; padding: 6px 9px; }
+  .pg-materiel { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+  .pg-mat { display: grid; grid-template-columns: 30px 1fr; gap: 0 8px; align-items: center; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07); }
+  .pg-mat i { grid-row: 1 / 3; font-style: normal; font-size: 1.15rem; text-align: center; opacity: .8; }
+  .pg-mat b { font-size: .84rem; line-height: 1.2; } .pg-mat span { font-size: .72rem; color: var(--discret); }
+  .pg-mat.ok { border-color: rgba(79,214,156,.35); } .pg-mat.ok i { color: var(--ok); opacity: 1; }
 
   /* ---- Interface (v69) : barre d'onglets plus compacte, barre de commandes sous la vue 3D ---- */
   @media (max-width: 1440px) {
@@ -819,6 +829,29 @@
 .g-gain b.pos { color: #4fd69c; } .g-gain b.neg { color: #ff7a6b; }
 @media (max-width: 720px) { .g-gain { grid-template-columns: 6.5em 1fr 3.4em; } }
 .g-vign img { width: 100%; height: auto; max-height: 96px; object-fit: contain; display: block; }
+/* (v101) garage : vélos et roues en petites cartes sur plusieurs colonnes, matériel verrouillé avec cadenas et niveau */
+.g-mosaique { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 10px; }
+.g-mosaique .g-carte { display: flex; flex-direction: column; align-items: stretch; gap: 7px; padding: 7px 7px 9px; text-align: left; }
+.g-mosaique .g-vign { min-height: 0; padding: 4px; aspect-ratio: 420 / 256; }
+.g-mosaique.g-m-roues .g-vign { aspect-ratio: 1 / 1; }
+.g-mosaique.g-m-roues .g-vign img, .g-mosaique.g-m-roues .g-vign svg { width: 100%; max-height: none; height: auto; }
+.g-mosaique .g-vign img { max-height: none; }
+.g-mosaique .g-txt b { font-size: .93rem; }
+.g-mosaique .g-txt em { font-size: .74rem; line-height: 1.3; }
+.g-mosaique .g-gains { gap: 4px; margin-top: 4px; }
+.g-mosaique .g-gain { grid-template-columns: 4.4em 1fr 3.3em; gap: 6px; }
+.g-mosaique .g-gl { font-size: .64rem; letter-spacing: .04em; }
+.g-mosaique .g-gain b { font-size: .82rem; }
+.g-carte.verrou { cursor: not-allowed; }
+.g-carte.verrou:hover { border-color: rgba(255,255,255,.22); }
+.g-carte.verrou .g-vign { position: relative; }
+.g-carte.verrou .g-vign img, .g-carte.verrou .g-vign svg { filter: grayscale(.4) opacity(.62); }
+.g-cadenas { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); white-space: nowrap; font-size: .8rem; font-weight: 900; color: #fff; background: rgba(16,22,31,.9); border: 1px solid rgba(255,138,61,.75); border-radius: 999px; padding: 5px 11px; box-shadow: 0 3px 10px rgba(0,0,0,.35); }
+.g-carte.verrou.secoue { animation: g-secoue .4s; }
+@keyframes g-secoue { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+.g-message { position: sticky; top: 6px; z-index: 3; margin-bottom: 10px; padding: 10px 13px; border-radius: 12px; background: #2a2016; border: 1px solid #ff8a3d; color: #ffe3c4; font-size: .86rem; font-weight: 700; }
+.g-filtres { display: flex; flex-wrap: wrap; gap: 7px; }
+.g-filtres .g-puce { padding: 6px 12px; font-size: .82rem; }
 /* progression de l accueil (carte niveau et bonus) */
 .accueil-prog .ap-tete { gap: 16px; }
 .accueil-prog .pg-rond { width: 84px; height: 84px; }

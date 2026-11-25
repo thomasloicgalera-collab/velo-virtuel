@@ -28,6 +28,7 @@ $("freinage").addEventListener("change", () => { Aero.reg.frein = $("freinage").
 function lireAero() { Aero.reg.vent = $("vent-actif").checked; Aero.reg.materiel = parseFloat($("materiel-aero").value) || 0; majMateriel(); }
 // vélo et roues choisis : leur poids et leur gain d'air entrent dans la vitesse (et le gain d'air dans la résistance du home trainer) ; fiche résumée
 function majMateriel() {
+  Deblocage.corriger();                                    // (v101) jamais de matériel verrouillé
   const m = materielVelo($("avatar-velo").value, $("avatar-roues").value), ref = materielVelo("simple", "35");
   Aero.reg.velo = m.aero; Aero.reg.masseVelo = m.masse; Aero.reg.clm = m.clm; if (!m.clm) Aero.reg.groupe = 0;
   const el = $("fiche-velo"); if (!el) return;
@@ -76,6 +77,7 @@ function marquerPastilles() {
     $(id).querySelectorAll("button").forEach((b) => b.classList.toggle("choisi", b.dataset.val === $(champ).value));
 }
 function lireApparence() {
+  Deblocage.corriger();                                    // (v101) un réglage enregistré ou restauré ne passe pas outre les niveaux
   return { peau: parseInt($("avatar-peau").value, 10), cheveux: parseInt($("avatar-cheveux").value, 10), coiffure: $("avatar-coiffure").value, barbe: $("avatar-barbe").value, casqueCouleur: parseInt($("avatar-casque-couleur").value, 10), casqueStyle: $("avatar-casque-style").value, verres: $("avatar-verres").value,
     bas: parseInt($("avatar-bas").value, 10), chaussettes: parseInt($("avatar-chaussettes").value, 10), yeux: $("avatar-yeux").value, basStyle: $("avatar-bas-style").value, casque: $("avatar-casque").checked, lunettes: $("avatar-lunettes").checked, realiste: $("avatar-realiste").checked, velo: $("avatar-velo").value, roues: $("avatar-roues").value };
 }

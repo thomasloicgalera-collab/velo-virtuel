@@ -4,7 +4,7 @@
    - bibliothèques CDN (Three.js, PeerJS, html-to-image : adresses versionnées) : copie gardée, réseau seulement la première fois ;
    - tout le reste (décor OpenStreetMap, IGN, serveur PeerJS) passe directement par le réseau, sans copie.
    Changer VERSION à chaque nouvelle version de l'application. */
-const VERSION = "velo-v100";
+const VERSION = "velo-v101";
 const LOCAL = [
   "./", "index.html", "style.css", "manifest.webmanifest",
   "icones/apple-touch-icon.png",
@@ -37,6 +37,7 @@ const LOCAL = [
   "js/photos.js",
   "js/hud-perso.js",
   "js/progression.js",
+  "js/deblocage.js",
   "js/revoir-ecran2.js",
   "js/seance.js",
   "js/textures-corps.js",
