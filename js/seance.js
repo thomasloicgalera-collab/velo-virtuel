@@ -32,10 +32,11 @@ const BIBLIO = [
   { cat: "Sur le parcours", nom: "Efforts en montée – VO2 (112 %)", desc: "Récupération à 50 % entre les montées, puis 112 % du FTP à chaque montée : très dur, prévois des montées courtes (Mur de Huy, Ardennes) ou arrête-toi avant le sommet avec la touche N.", blocs: [[8, 50], [3, 112], [4, 50], [3, 112], [4, 50], [3, 112], [8, 50]], dyn: { type: "montees", effort: 112, recup: 50 } },
   { cat: "Tests", nom: "Test en rampe", desc: "La puissance monte jusqu’à l’épuisement : ton meilleur 1 min × 0,75 estime le FTP.", blocs: [[5, 45], [20, 50, 130], [5, 40]] }
 ];
-const blocsVersIntervalles = (blocs) => blocs.map(([min, pct, fin, libre, fc]) => {
+const blocsVersIntervalles = (blocs) => blocs.map(([min, pct, fin, libre, fc, cad]) => {
   const iv = fin !== undefined ? { min, pct, fin } : { min, pct };
   if (libre) iv.libre = true;
   if (fc) iv.fc = fc;                         // (v69 suite) fréquence cardiaque visée, en % de la FC max ; pct = puissance de départ
+  if (cad) iv.cad = Math.round(cad);          // (v103) cadence visée (tr/min), quand la séance en donne une
   return iv;
 });
 const pctA = (iv, frac) => (iv.fin !== undefined ? iv.pct + (iv.fin - iv.pct) * borner(frac, 0, 1) : iv.pct);
@@ -46,7 +47,8 @@ function libW(iv) {
   const a = Math.round(iv.pct * ftp() / 100);
   return iv.fin !== undefined ? a + "→" + Math.round(iv.fin * ftp() / 100) + " W" : a + " W";
 }
-function libelleInt(iv) {
+const libelleInt = (iv) => libelleSansCadence(iv) + (iv.cad ? " à " + iv.cad + " tr/min" : "");
+function libelleSansCadence(iv) {
   if (iv.fc) return formatMinutes(iv.min) + " guidées par le cœur : " + iv.fc + " % de ta FC max (" + libW(iv) + "), la puissance s’ajuste";
   if (iv.libre) return formatMinutes(iv.min) + " en effort libre (à fond mais régulier, le home trainer ne t’impose rien)";
   return iv.fin !== undefined
@@ -102,6 +104,21 @@ function montéesDyn() {
   route._montDyn = l; route._montDynL = route.longueur;
   return l;
 }
+// (v103) où en est le « bloc » d'une séance qui suit le parcours : part faite (0 à 1) et mètres restants
+function blocDyn() {
+  const d = balade.distance, L = route.longueur;
+  if (seance.dyn.type === "profil") return { type: "profil", pente: penteA(d) };
+  const x = route.boucle ? ((d % L) + L) % L : d, cs = montéesDyn();
+  if (!cs.length) return { type: "aucune", part: null, reste: null };
+  const i = cs.findIndex((c) => x >= c.s && x <= c.e);
+  if (i >= 0) return { type: "montee", i, part: (x - cs[i].s) / Math.max(1, cs[i].e - cs[i].s), reste: cs[i].e - x };
+  let j = cs.findIndex((c) => c.s > x), debutM = j >= 0 ? cs[j].s : Infinity;
+  if (j < 0 && route.boucle) { j = 0; debutM = L + cs[0].s; }
+  if (j < 0) return { type: "recup", i: -1, part: null, reste: null };
+  const passees = cs.filter((c) => c.e < x);
+  const depuis = passees.length ? passees[passees.length - 1].e : route.boucle ? cs[cs.length - 1].e - L : 0;
+  return { type: "recup", i: j, part: (x - depuis) / Math.max(1, debutM - depuis), reste: debutM - x };
+}
 function majErgDyn() {
   const dyn = seance.dyn, d = balade.distance, L = route.longueur, W = ftp();
   let pct = dyn.recup || dyn.base || 55, cible = "", lignes = [], etat = "plat";
@@ -131,7 +148,7 @@ function majErgDyn() {
   }
   const watts = Math.round(pct * W / 100 * (seance.k || 1));
   envoyerPuissanceCible(watts);
-  seance.dynInfo = { cible, lignes, watts };
+  seance.dynInfo = { cible, lignes, watts, bloc: blocDyn() };       // (v103) détails pour l'encart du bloc en cours
   seance.cibleW = watts; seance.ergVu = true;
   if (seance.dynEtat !== null && seance.dynEtat !== etat && dyn.type === "montees" && typeof annoncer === "function" && !$("onglet-world").hidden) {
     annoncer(etat === "montee" ? "Montée : effort !" : "Sommet : récupère", etat === "montee" ? Math.round(pct) + " % du FTP jusqu’au sommet (" + watts + " W)" : "retour à " + Math.round(dyn.recup) + " % du FTP", "", 4);
@@ -292,6 +309,11 @@ function chargerSeance(blocs, activerErg, nom, textes, dyn) {
     log("Mode ERG activé : démarre la balade pour lancer la séance.");
   }
 }
+// (v103) intensité de la séance, réglée au clavier (↑ ↓) ou avec les boutons ▲ ▼ du résumé de séance
+function reglerIntensite(sens) {
+  seance.k = Math.round(borner((seance.k || 1) + sens * 0.05, 0.5, 1.5) * 100) / 100;
+  if (typeof annoncer === "function") annoncer("Intensité " + Math.round(seance.k * 100) + " %", "de la séance ERG", "", 2);
+}
 $("btn-erg-rapide").addEventListener("click", () => {
   if (!seance.intervalles.length && !seance.dyn) { log("Aucune séance chargée."); return; }
   chargerSeance(seance.intervalles, true, undefined, undefined, seance.dyn);
@@ -434,12 +456,14 @@ function lireZwo(texte, nomFichier) {
   const wo = doc.querySelector("workout") || doc.documentElement;
   for (const el of wo.children) {
     const t = el.tagName, d = n(el, "Duration", 0) / 60;
-    if (t === "SteadyState" && d > 0) blocs.push([d, Math.round(n(el, "Power", 0.6) * 100)]);
-    else if ((t === "Warmup" || t === "Cooldown" || t === "Ramp") && d > 0) blocs.push([d, Math.round(n(el, "PowerLow", 0.5) * 100), Math.round(n(el, "PowerHigh", 0.7) * 100)]);
-    else if (t === "FreeRide" && d > 0) blocs.push([d, 60]);
+    const cad = n(el, "Cadence", 0);                           // (v103) cadence visée du bloc, si le fichier en donne une
+    if (t === "SteadyState" && d > 0) blocs.push([d, Math.round(n(el, "Power", 0.6) * 100), undefined, undefined, undefined, cad]);
+    else if ((t === "Warmup" || t === "Cooldown" || t === "Ramp") && d > 0) blocs.push([d, Math.round(n(el, "PowerLow", 0.5) * 100), Math.round(n(el, "PowerHigh", 0.7) * 100), undefined, undefined, cad]);
+    else if (t === "FreeRide" && d > 0) blocs.push([d, 60, undefined, undefined, undefined, cad]);
     else if (t === "IntervalsT") {
       const r = n(el, "Repeat", 1), on = n(el, "OnDuration", 0) / 60, off = n(el, "OffDuration", 0) / 60;
-      for (let i = 0; i < r; i++) { if (on > 0) blocs.push([on, Math.round(n(el, "OnPower", 1) * 100)]); if (off > 0) blocs.push([off, Math.round(n(el, "OffPower", 0.5) * 100)]); }
+      const cadRepos = n(el, "CadenceResting", 0);
+      for (let i = 0; i < r; i++) { if (on > 0) blocs.push([on, Math.round(n(el, "OnPower", 1) * 100), undefined, undefined, undefined, cad]); if (off > 0) blocs.push([off, Math.round(n(el, "OffPower", 0.5) * 100), undefined, undefined, undefined, cadRepos]); }
     }
   }
   const nomEl = doc.querySelector("name");
@@ -456,7 +480,7 @@ async function importerSeance(f, charger) {
     const texte = await f.text();
     const r = /\.(zwo|xml)$/i.test(f.name) ? lireZwo(texte, f.name) : lireErg(texte, f.name);
     if (!r.blocs.length) throw new Error("aucun intervalle reconnu dans ce fichier");
-    const ints = blocsVersIntervalles(r.blocs.map(([min, pct, fin]) => [min, borner(pct, 10, 400), fin === undefined ? undefined : borner(fin, 10, 400)]));
+    const ints = blocsVersIntervalles(r.blocs.map(([min, pct, fin, , , cad]) => [min, borner(pct, 10, 400), fin === undefined ? undefined : borner(fin, 10, 400), undefined, undefined, cad >= 30 && cad <= 200 ? cad : 0]));
     seancesImportees = seancesImportees.filter((s) => s.nom !== r.nom);        // même nom : la nouvelle version remplace l'ancienne
     seancesImportees.unshift({ nom: r.nom, ints: ints, textes: r.textes || [] });
     seancesImportees = seancesImportees.slice(0, 30);
@@ -823,7 +847,7 @@ function crcFit(octets, crc) {
   return crc;
 }
 
-function construireFit(s, debutMs) {
+function construireFit(s, debutMs, version) {
   const n = s.length;
   const EPOCH_FIT = 631065600;
   const debut = Math.floor(debutMs / 1000) - EPOCH_FIT;
@@ -852,6 +876,8 @@ function construireFit(s, debutMs) {
 
   definition(0, 0, [[0, 1, ENUM], [1, 2, UINT16], [2, 2, UINT16], [3, 4, UINT32Z], [4, 4, UINT32]]);
   u8(0); u8(4); u16(255); u16(0); u32(1234567); u32(debut);
+  // (v102) version de l'application qui a enregistré la sortie (inconnue pour les séances d'avant : rien n'est écrit)
+  if (version) { definition(6, 49, [[0, 2, UINT16]]); u8(6); u16(version); }
 
   definition(1, 20, [[253, 4, UINT32], [5, 4, UINT32], [2, 2, UINT16], [6, 2, UINT16],
                      [7, 2, UINT16], [3, 1, UINT8], [4, 1, UINT8], [9, 2, SINT16]]);

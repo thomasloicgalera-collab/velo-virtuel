@@ -6,6 +6,7 @@
    ===================================================================== */
 const Createur = (function () {
   // lignes : { t: "bloc", min, pct } | { t: "rampe", min, pct, fin } | { t: "rep", n, a: { min, pct }, b: { min, pct } }
+  // (v103) `cad` (facultatif, sur un bloc, une rampe, a ou b) = cadence visée en tr/min
   let lignes = [];
   const MODELES = {
     echauf: () => ({ t: "rampe", min: 10, pct: 45, fin: 70 }),
@@ -16,25 +17,27 @@ const Createur = (function () {
   };
   const num = (v, a, b, def) => { const x = parseFloat(String(v).replace(",", ".")); return Number.isFinite(x) ? borner(x, a, b) : def; };
   function blocs() {
-    const l = [];
+    const l = [], cad = (o) => (o.cad >= 30 ? o.cad : 0);
+    const un = (o, fin) => [o.min, o.pct, fin, undefined, undefined, cad(o)];
     for (const x of lignes) {
-      if (x.t === "bloc") l.push([x.min, x.pct]);
-      else if (x.t === "rampe") l.push([x.min, x.pct, x.fin]);
-      else for (let i = 0; i < x.n; i++) { l.push([x.a.min, x.a.pct]); if (x.b.min > 0) l.push([x.b.min, x.b.pct]); }
+      if (x.t === "bloc") l.push(un(x));
+      else if (x.t === "rampe") l.push(un(x, x.fin));
+      else for (let i = 0; i < x.n; i++) { l.push(un(x.a)); if (x.b.min > 0) l.push(un(x.b)); }
     }
     return l;
   }
   const intervalles = () => blocsVersIntervalles(blocs());
   const champ = (val, k, min, max, pas, larg) => '<input type="number" data-k="' + k + '" value="' + val + '" min="' + min + '" max="' + max + '" step="' + pas + '" style="width:' + (larg || 4.6) + 'em">';
+  const champCad = (o, k) => ' <label class="crea-cad" title="Cadence visée (facultatif) : affichée pendant la séance">' + champ(o.cad || "", k, 30, 200, 1, 3.8).replace("<input ", '<input placeholder="–" aria-label="Cadence visée" ') + " tr/min</label>";
   const watts = (pct) => '<small class="crea-w">' + Math.round(pct * ftp() / 100) + "&nbsp;W</small>";
   function rendre() {
     const c = $("crea-lignes");
     c.innerHTML = lignes.map((x, i) => {
       let h = '<div class="crea-l" data-i="' + i + '"><span class="crea-n">' + (i + 1) + "</span>";
-      if (x.t === "bloc") h += "<b>Bloc</b> " + champ(x.min, "min", 0.25, 240, 0.25) + " min à " + champ(x.pct, "pct", 20, 300, 1) + " % du FTP " + watts(x.pct);
-      else if (x.t === "rampe") h += "<b>Rampe</b> " + champ(x.min, "min", 0.25, 240, 0.25) + " min de " + champ(x.pct, "pct", 20, 300, 1) + " % à " + champ(x.fin, "fin", 20, 300, 1) + " % " + watts(x.pct) + "→" + watts(x.fin);
-      else h += "<b>Répéter</b> " + champ(x.n, "n", 1, 40, 1, 3.6) + " × ( " + champ(x.a.min, "a.min", 0.25, 60, 0.25) + " min à " + champ(x.a.pct, "a.pct", 20, 300, 1) + " % " + watts(x.a.pct) +
-        ", puis " + champ(x.b.min, "b.min", 0, 60, 0.25) + " min à " + champ(x.b.pct, "b.pct", 20, 300, 1) + " % " + watts(x.b.pct) + " )";
+      if (x.t === "bloc") h += "<b>Bloc</b> " + champ(x.min, "min", 0.25, 240, 0.25) + " min à " + champ(x.pct, "pct", 20, 300, 1) + " % du FTP " + watts(x.pct) + champCad(x, "cad");
+      else if (x.t === "rampe") h += "<b>Rampe</b> " + champ(x.min, "min", 0.25, 240, 0.25) + " min de " + champ(x.pct, "pct", 20, 300, 1) + " % à " + champ(x.fin, "fin", 20, 300, 1) + " % " + watts(x.pct) + "→" + watts(x.fin) + champCad(x, "cad");
+      else h += "<b>Répéter</b> " + champ(x.n, "n", 1, 40, 1, 3.6) + " × ( " + champ(x.a.min, "a.min", 0.25, 60, 0.25) + " min à " + champ(x.a.pct, "a.pct", 20, 300, 1) + " % " + watts(x.a.pct) + champCad(x.a, "a.cad") +
+        ", puis " + champ(x.b.min, "b.min", 0, 60, 0.25) + " min à " + champ(x.b.pct, "b.pct", 20, 300, 1) + " % " + watts(x.b.pct) + champCad(x.b, "b.cad") + " )";
       h += '<span class="crea-act"><button type="button" class="petit" data-act="haut" title="Monter">↑</button><button type="button" class="petit" data-act="copie" title="Dupliquer">⧉</button><button type="button" class="petit" data-act="suppr" title="Retirer">✕</button></span></div>';
       return h;
     }).join("") || '<div class="info">Aucun bloc : ajoute un échauffement, puis tes efforts, puis un retour au calme.</div>';
@@ -50,7 +53,7 @@ const Createur = (function () {
     const inp = e.target.closest("input[data-k]"), l = e.target.closest(".crea-l");
     if (!inp || !l) return;
     const x = lignes[parseInt(l.dataset.i, 10)], k = inp.dataset.k;
-    const lim = { min: [0.25, 240, 1], pct: [20, 300, 50], fin: [20, 300, 50], n: [1, 40, 1], "a.min": [0.25, 60, 1], "a.pct": [20, 300, 50], "b.min": [0, 60, 0], "b.pct": [20, 300, 50] }[k];
+    const lim = { min: [0.25, 240, 1], pct: [20, 300, 50], fin: [20, 300, 50], n: [1, 40, 1], "a.min": [0.25, 60, 1], "a.pct": [20, 300, 50], "b.min": [0, 60, 0], "b.pct": [20, 300, 50], cad: [0, 200, 0], "a.cad": [0, 200, 0], "b.cad": [0, 200, 0] }[k];
     const v = num(inp.value, lim[0], lim[1], lim[2]);
     if (k.indexOf(".") > 0) { const [o, p] = k.split("."); x[o][p] = v; } else x[k] = k === "n" ? Math.round(v) : v;
     const w = l.querySelectorAll(".crea-w");               // watts affichés à côté des pourcentages

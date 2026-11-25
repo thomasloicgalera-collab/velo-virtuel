@@ -198,6 +198,7 @@ $("btn-fcmax-estime").addEventListener("click", () => {
   log("FC max estimée à " + $("fcmax").value + " bpm (208 − 0,7 × âge).");
 });
 ["ftp", "fcmax", "poids"].forEach((id) => $(id).addEventListener("change", () => { sauverReglages(); rendreSeance(); majStats(); }));
+$("version-appli").textContent = VERSION_APPLI;      // (v102)
 document.querySelectorAll("input[name=mode]").forEach((r) => r.addEventListener("change", () => {
   reinitialiserEnvois();
   if (modeActuel() === "erg") seance.t0 = balade.temps;

@@ -349,15 +349,33 @@
         <div class="hz" id="hz-groupe" hidden><div class="carte-b" id="hz-groupe-c"></div></div>
         <div class="hz" id="hz-tours" hidden><div class="carte-b" id="hz-tours-c"></div></div>
         <div class="hz" id="hz-meteo" style="display:none"><div class="carte-b hz-ville"><span id="hz-meteo-t"></span></div></div>
-        <div class="carte-b" id="hz-seance" hidden></div>
         </div>
         <div class="hz" id="hz-droite">
+        <div class="hz" id="hz-seance" hidden><div class="carte-b">
+          <div class="se-tete"><b id="se-nom">Séance</b><div class="se-barre"><i id="se-part"></i></div><div class="se-fin"><span id="se-fin-l">Fin dans</span><b id="se-fin">0:00</b></div></div>
+          <div class="se-plus-loin" id="se-avant"></div>
+          <ol class="se-liste" id="se-liste"></ol>
+          <div class="se-plus-loin" id="se-apres"></div>
+          <div class="se-pied"><span class="se-int" title="Intensité de la séance (flèches ↑ ↓ du clavier)"><button type="button" id="se-plus" aria-label="Augmenter l’intensité de la séance">&#9650;</button><b id="se-k">100 %</b><button type="button" id="se-moins" aria-label="Baisser l’intensité de la séance">&#9660;</button></span><span class="se-etoiles" id="se-etoiles"></span></div>
+        </div></div>
         <div class="hz" id="hz-aero"><div class="carte-b"><div class="aero-l"><canvas id="hz-vent-c" width="132" height="132"></canvas><div><div class="aero-w" id="hz-aero-w">+0 W</div><div class="aero-s">gain aéro</div></div></div><div class="aero-v" id="hz-vent-t">vent faible</div></div></div>
         <div class="hz" id="hz-carte"><div class="carte-b"><canvas id="hz-carte-c" width="240" height="220"></canvas></div></div>
         </div>
         <div class="hz" id="hz-profil"><div class="carte-b" style="position:absolute;inset:0;padding:.3em .5em"><canvas id="hz-profil-c" width="1200" height="150"></canvas></div></div>
         <div class="hz" id="hz-annonce" hidden></div>
+        <div class="hz" id="hz-milieu">
+        <div class="hz" id="hz-bloc" hidden><div class="carte-b">
+          <div class="bl-cible"><span id="bl-verbe">Vise</span><b id="bl-cible">–</b><span id="bl-duree"></span><span id="bl-detail"></span></div>
+          <div class="bl-droite">
+            <div class="bl-barre" id="bl-barre"><div><i id="bl-part"></i></div><span id="bl-reste">0:00</span></div>
+            <div class="bl-valeurs">
+              <div class="bl-w"><b id="bl-w">–</b><small>W</small></div>
+              <div class="bl-mini"><span><b id="bl-fc">–</b><i aria-label="battements par minute">&#9829;</i></span><span><b id="bl-cad">–</b><small>tr/min</small></span></div>
+            </div>
+          </div>
+        </div></div>
         <div class="hz" id="hz-segment" hidden><div class="carte-b" id="hz-segment-c"></div></div>
+        </div>
         <div class="hz" id="hz-cmd"><button class="btn-balade-x">Démarrer la balade</button><button class="btn-terminer-x">Terminer et enregistrer</button><button id="btn-quitter-fs">Quitter le plein écran</button></div>
         </div>
         <div class="dock-jeu" id="dock-jeu">
@@ -406,7 +424,7 @@
             <button type="button" class="ph-zone" data-g="puissance" style="left:2%;top:5%;width:23%;height:38%"><i>Puissance</i><em></em></button>
             <button type="button" class="ph-zone" data-g="classement" style="left:2%;top:47%;width:23%;height:20%"><i>Classement</i><em></em></button>
             <button type="button" class="ph-zone" data-g="bandeau" style="left:30%;top:5%;width:40%;height:11%"><i>Bandeau</i><em></em></button>
-            <button type="button" class="ph-zone" data-g="intervalles" style="left:30%;top:21%;width:40%;height:11%"><i>Intervalles et records</i><em></em></button>
+            <button type="button" class="ph-zone" data-g="intervalles" style="left:30%;top:21%;width:40%;height:11%"><i>Séance et records</i><em></em></button>
             <button type="button" class="ph-zone" data-g="carte" style="left:77%;top:5%;width:21%;height:52%"><i>Carte</i><em></em></button>
             <button type="button" class="ph-zone" data-g="carte" style="left:27%;top:80%;width:46%;height:14%"><i>Profil du parcours</i><em></em></button>
           </div>
@@ -642,6 +660,10 @@
         <span class="stats" id="msg-sauvegarde" aria-live="polite"></span>
       </div>
     </section>
+    <section class="carte" data-r="donnees">
+      <h2>Version</h2>
+      <p class="info" style="margin:0">Vélo virtuel, version <b id="version-appli">inconnue</b>. Ce numéro est aussi écrit dans les fichiers .FIT.</p>
+    </section>
   </div>
 
   <div id="resume-fin" hidden><div class="rf-carte" id="resume-fin-c"></div></div>
@@ -737,6 +759,7 @@
 <script src="js/alertes.js"></script>
 <script src="js/rapport.js"></script>
 <script src="js/nolio.js"></script>
+<script src="js/hud-seance.js"></script>
 <script src="js/demarrage.js"></script>
 <script src="js/accueil.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>

@@ -60,7 +60,6 @@ function garderEcranAllume(oui) {
 }
 
 function rafraichir() {
-  synchroRoute();
   const t = maintenant();
   // (v69 suite) on revoit une sortie enregistrée : rien n'est roulé ni envoyé au home trainer, l'écran suit l'enregistrement
   if (typeof Revoir !== "undefined" && Revoir.actif) {
@@ -194,7 +193,7 @@ function couleurPente(p) {
   if (p <= 8) return "#FF8A4C";
   return "#FF5A5A";
 }
-let dernierDeniv = 0, hudDernier = 0, hudSeance = "";
+let dernierDeniv = 0, hudDernier = 0;
 function majHud(puissance, fc) {
   const erg = modeActuel() === "erg";
   const p = penteMonde();
@@ -234,7 +233,7 @@ function majHud(puissance, fc) {
   $("hz-reste-b").hidden = !(reste > 0);
   if (reste > 0) { $("hz-reste").textContent = fr1(reste / 1000); if ($("hz-reste-u").textContent !== ru) $("hz-reste-u").textContent = ru; }
   const pe = $("hz-pente"), av = $("hz-pente-av");
-  if (erg) { pe.textContent = "ERG"; pe.style.color = "#FFB45E"; av.textContent = ""; }
+  if (echauffementEnCours()) { pe.textContent = "ERG"; pe.style.color = "#FFB45E"; av.textContent = ""; }     // (v102) pente affichée aussi en séance, puisqu'elle compte dans la vitesse
   else {
     pe.innerHTML = fr1(p) + "&nbsp;%"; pe.style.color = couleurPente(p);
     // pente moyenne des 300 prochains mètres (quand le parcours a du relief)
@@ -243,30 +242,14 @@ function majHud(puissance, fc) {
     const txt = fin - d0 > 50 && Math.abs(pm - p) >= 0.8 ?"puis " + fr1(pm) + " % sur " + Math.round(fin - d0) + " m" : "";
     if (av.textContent !== txt) { av.textContent = txt; av.style.color = couleurPente(pm); }
   }
-  const cible = $("hz-cible"), panneau = $("hz-seance");
-  if (erg) {
-    if (seance.dyn && seance.dynInfo) {                        // (v95) séance qui suit le parcours : cible et consignes du moment
-      cible.textContent = seance.dynInfo.cible;
-      panneau.hidden = false;
-      const c2 = "dyn|" + seance.dynInfo.lignes.join("|");
-      if (c2 !== hudSeance) { hudSeance = c2; panneau.innerHTML = '<div class="tt">Séance</div>' + seance.dynInfo.lignes.map((l) => '<div class="iv"><span>' + l + "</span></div>").join(""); }
-      return;
-    }
+  const cible = $("hz-cible");                              // rappel sous la puissance, visible seulement si l'encart du bloc est masqué
+  if (!erg) cible.textContent = "";
+  else if (seance.dyn) cible.textContent = seance.dynInfo ? seance.dynInfo.cible : "";
+  else {
     const cur = intervalleA(balade.temps - seance.t0);
     cible.textContent = cur && cur.iv.libre ? "effort libre · " + formatDuree(Math.ceil(cur.reste)) : cur && cur.iv.fc ? "cœur " + Math.round(cur.iv.fc * fcmax() / 100) + " bpm · " + (etatFc.i === cur.i ? Math.round(etatFc.w) : "–") + " W · " + formatDuree(Math.ceil(cur.reste)) : cur ? "tenir " + Math.round(pctA(cur.iv, 1 - cur.reste / (cur.iv.min * 60)) * ftp() / 100 * (seance.k || 1)) + " W · " + formatDuree(Math.ceil(cur.reste)) : "séance terminée";
-    panneau.hidden = false;
-    const cle = seance.intervalles.map((x) => x.min + ":" + x.pct + ":" + (x.fin || "")).join(",") + "|" + (cur ? cur.i : -1) + "|" + ftp();
-    if (cle !== hudSeance) {
-      hudSeance = cle;
-      const deb = Math.max(0, (cur ? cur.i : 0) - 1);
-      panneau.innerHTML = '<div class="tt">Séance</div>' + seance.intervalles.map((iv, i) => {
-        if (i < deb || i > deb + 4) return "";
-        const cls = cur && i === cur.i ? " en-cours" : (!cur || i < cur.i ? " fait" : "");
-        const zc = ZONES_P[indexZone(ZONES_P, pctMoyen(iv) / 100)].couleur;
-        return '<div class="iv' + cls + '" style="border-left:.35em solid ' + zc + '"><span>' + formatMinutes(iv.min) + '</span><span>' + libW(iv) + '</span></div>';
-      }).join("");
-    }
-  } else { cible.textContent = ""; panneau.hidden = true; hudSeance = ""; }
+  }
+  if (typeof HudSeance !== "undefined") HudSeance.maj(puissance, fc);     // (v103) résumé de la séance à droite et bloc en cours en haut
 }
 
 /* (v69) courbe de la puissance des 60 dernières secondes, sous le bloc effort (barres à la couleur de la zone) */

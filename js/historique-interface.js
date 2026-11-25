@@ -92,7 +92,7 @@ let detail = null;   // { resume, samples } de la séance affichée en détail
 async function sauverSeanceCourante(minimum) {
   const n = session.samples.length;
   if (!stockage.type || n < (minimum || 60) || !session.debut) return false;
-  const resume = Object.assign({ id: session.debut, parcours: route.nom, ftp: ftp(), fcmax: fcmax(), test: typeTest(seance.intervalles) },
+  const resume = Object.assign({ id: session.debut, parcours: route.nom, ftp: ftp(), fcmax: fcmax(), version: VERSION_APPLI, test: typeTest(seance.intervalles) },
                                 resumer(session.samples, ftp(), fcmax()));
   // (v69 suite) courbe de puissance et repères cardio de la séance ; de quoi la revoir en 3D (monde, départ, autres coureurs)
   try { Analyse.completer(resume, session.samples); } catch (e) { /* facultatif */ }
@@ -207,7 +207,7 @@ $("btn-detail-fermer").addEventListener("click", () => { detail = null; $("detai
 $("btn-detail-fit").addEventListener("click", () => {
   if (!detail) return;
   try {
-    telecharger(construireFit(detail.samples, detail.resume.id), nomFichierFit(detail.resume.id));
+    telecharger(construireFit(detail.samples, detail.resume.id, detail.resume.version), nomFichierFit(detail.resume.id));
     log("Fichier " + nomFichierFit(detail.resume.id) + " créé.");
   } catch (err) { log("Export impossible : " + err.message); }
 });
@@ -269,7 +269,7 @@ $("btn-export").addEventListener("click", async () => {
   const id = session.debut;
   try {
     const nom = nomFichierFit(id);
-    const octetsFit = construireFit(session.samples, id);
+    const octetsFit = construireFit(session.samples, id, VERSION_APPLI);
     telecharger(octetsFit, nom);
     if (typeof Nolio !== "undefined") Nolio.terminee(octetsFit, id);          // (v98) envoi à Nolio (automatique si la case est cochée)
     log("Fichier " + nom + " créé (" + formatDuree(session.samples.length) + ").");
@@ -455,8 +455,7 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     const s = k === "ArrowUp" ? 1 : -1;
     if (erg) {
-      seance.k = Math.round(borner((seance.k || 1) + s * 0.05, 0.5, 1.5) * 100) / 100;
-      annoncer("Intensité " + Math.round(seance.k * 100) + " %", "de la séance ERG", "", 2);
+      reglerIntensite(s);
     } else {
       const d = $("difficulte"); d.value = String(borner((parseInt(d.value, 10) || 0) + s * 10, 0, 100));
       d.dispatchEvent(new Event("input"));

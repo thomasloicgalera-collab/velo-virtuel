@@ -116,17 +116,9 @@ $("fichier-gpx").addEventListener("change", async (e) => {
   }
 });
 const routePlate = route;
-let routeUtilisateur = route;
-function synchroRoute() {
-  if (modeActuel() === "erg") {
-    if (route !== routePlate && !route.geo && !route.synth) { routeUtilisateur = route; route = routePlate; balade.altitude = route.alt0; majInfoParcours(); }
-  } else if (route === routePlate && routeUtilisateur !== routePlate) {
-    route = routeUtilisateur; balade.altitude = altitudeA(balade.distance); majInfoParcours();
-  }
-}
 $("btn-plat").addEventListener("click", () => {
   if (session.samples.length > 0) { log("Termine ou abandonne d’abord la séance en cours avant de changer de parcours."); return; }
-  routeUtilisateur = routePlate; route = routePlate;
+  route = routePlate;
   balade.distance = 0; balade.vitesse = 0; balade.altitude = route.alt0;
   majInfoParcours();
 });
@@ -826,10 +818,12 @@ const session = { samples: [], debut: null, dernierEnreg: 0, pause: 0 };   // pa
 
 function modeActuel() { return document.querySelector("input[name=mode]:checked").value; }
 
+/* (v102) En séance ERG, la vitesse, l'altitude et le dénivelé suivent la vraie pente du parcours (avant : tout était compté à plat, alors que
+   la 3D montait : séances « Sur le parcours » plus rapides en côte qu'à plat, records de côte faussés, 0 m de dénivelé). Le home trainer, lui,
+   garde la puissance imposée. Seul l'échauffement avant une course reste compté à plat : on revient ensuite au départ (sans saut d'altitude). */
 function penteMonde() {
-  const mode = modeActuel();
-  if (mode === "manuel") return parseFloat($("pente-manuelle").value);
-  if (mode === "erg") return 0;
+  if (modeActuel() === "manuel") return parseFloat($("pente-manuelle").value);
+  if (typeof echauffementEnCours === "function" && echauffementEnCours()) return 0;
   return penteA(balade.distance);
 }
 
@@ -936,7 +930,9 @@ function avancer(dt, puissance, pente) {
   const masse = (parseFloat($("poids").value) || 75) + Aero.reg.masseVelo;      // poids du cycliste + vélo et roues choisis (8 kg pour le vélo simple, comme les autres coureurs)
   const g = 9.81, rendement = 0.975;
   const angle = Math.atan(pente / 100);
-  const v = Math.max(balade.vitesse, 1);
+  // (v102) la poussée est calculée comme à 1 m/s au minimum ; en ERG ce minimum est abaissé à 0,3 m/s, sinon une petite puissance imposée
+  // sur un mur (récupération à 100 W sur 12 %) ne suffisait pas à démarrer et le vélo restait arrêté alors que l'on pédalait
+  const v = Math.max(balade.vitesse, modeActuel() === "erg" ? 0.3 : 1);
   condAir.abri = Peloton.actif() && (Peloton.mode() !== "clm" || Peloton.ttt()) ? Peloton.abriPour(balade.distance, 0.9) : 1;   // contre-la-montre : pas d'aspiration (sauf par équipe : abri de tes coéquipiers)
   if (typeof Groupe !== "undefined" && Groupe.actif() && $("peloton-mode").value !== "clm" && !(Peloton.actif() && Peloton.mode() === "clm")) condAir.abri = Math.min(condAir.abri, Groupe.abriPour(balade.distance));   // (v71) derrière un ami
   // vélo de chrono en groupe : malus progressif (environ 1,5 s pour se relever ou se remettre en position)
@@ -974,6 +970,7 @@ let derniereEnvoyee = null;
 let dernierWatts = null;
 let dernierSim = null;          // derniers vent, roulement et air envoyés au home trainer
 function reinitialiserEnvois() { derniereEnvoyee = null; dernierWatts = null; dernierSim = null; }
+let dernierEnvoiCible = 0;      // (v102) heure de la dernière puissance cible envoyée
 
 function facteurDescente() { return 1 - 0.9 * (parseInt($("difficulte-desc").value, 10) || 0) / 100; }
 function penteEnvoyee() {            // en descente, le home trainer garde de la résistance : tu peux continuer à pédaler au lieu de tourner dans le vide
@@ -1016,6 +1013,10 @@ function envoyerPenteValeur(envoyee) {
 
 function envoyerPuissanceCible(watts) {
   if (!trainer.pret || watts === dernierWatts) return;
+  // (v102) comme pour la pente (v77) : jamais plus d'une commande par seconde, et aucune tant qu'une commande est en route. Dans les séances
+  // « Sur le parcours », la cible change sans cesse avec la pente. La boucle repasse ici : la valeur à jour part au passage suivant.
+  if (Date.now() - dernierEnvoiCible < 1000 || ecrituresEnAttente > 0) return;
+  dernierEnvoiCible = Date.now();
   dernierWatts = watts;
   derniereEnvoyee = null;
   const buf = new DataView(new ArrayBuffer(3));

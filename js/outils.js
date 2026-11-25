@@ -8,6 +8,7 @@ const UUID = {
   POWER: 0x1818, POWER_MEAS: 0x2A63,
   HR: 0x180D, HR_MEAS: 0x2A37
 };
+const VERSION_APPLI = 103;      // (v102) affichée dans les Réglages et écrite dans les .FIT ; à changer à chaque version, avec VERSION dans sw.js
 const $ = (id) => document.getElementById(id);
 const maintenant = () => performance.now();
 const frais = (ts) => ts && maintenant() - ts < 5000;

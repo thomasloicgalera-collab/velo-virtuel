@@ -1357,14 +1357,14 @@ function entrerMonde(id, tuile) {
     if (route !== m.route && session.samples.length > 0) { $("msg-monde").textContent = "Termine ou abandonne d’abord la séance en cours avant de changer de monde."; return; }
     if (route !== m.route) {
       if (!route.geo && !route.synth) routeAvantMonde = route;
-      route = m.route; routeUtilisateur = m.route;
+      route = m.route;
       route.monde = { osm: m.osm, ign: m.ign };
       balade.distance = 0; balade.vitesse = 0; balade.altitude = route.alt0;
       majInfoParcours();
     }
   } else if (route.geo || route.synth) {
     if (session.samples.length > 0) { $("msg-monde").textContent = "Termine ou abandonne d’abord la séance en cours avant de changer de monde."; return; }
-    route = routeAvantMonde || routePlate; routeUtilisateur = route;
+    route = routeAvantMonde || routePlate;
     balade.distance = 0; balade.vitesse = 0; balade.altitude = route.alt0;
     majInfoParcours();
   }
