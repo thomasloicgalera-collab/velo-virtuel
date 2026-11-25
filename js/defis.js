@@ -18,12 +18,19 @@ const Defis = (function () {
   const sauver = () => { try { localStorage.setItem(CLE, JSON.stringify(data)); } catch (e) { /* stockage indisponible */ } };
   function verifierSemaine() { if (data.sem !== semaineDe(new Date())) { data = { sem: semaineDe(new Date()), seg: {} }; sauver(); } }
 
+  // (v104) les temps peuvent venir d'un autre ordinateur (sortie de groupe, code collé) : textes raccourcis, noms réservés refusés, listes limitées
+  const nomSur = (x) => typeof x === "string" && x.length > 0 && x.length <= 160 && !(x in {});
+  const a = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   function ajouter(cle, nom, monde, auteur, t, date) {
     verifierSemaine();
-    if (!cle || !(t > 0) || !auteur) return false;
-    const s = data.seg[cle] = data.seg[cle] || { nom, monde, res: {} }, r = s.res[auteur];
+    t = Number(t);
+    if (!nomSur(cle) || !(t > 0 && t < 86400) || !nomSur(auteur)) return false;
+    if (!a(data.seg, cle) && Object.keys(data.seg).length >= 200) return false;
+    const s = a(data.seg, cle) ? data.seg[cle] : (data.seg[cle] = { nom: String(nom || "Segment").slice(0, 80), monde: String(monde || "").slice(0, 80), res: {} });
+    const r = a(s.res, auteur) ? s.res[auteur] : null;
     if (r && r.t <= t) return false;
-    s.res[auteur] = { t: Math.round(t * 10) / 10, date: date || Date.now() };
+    if (!r && Object.keys(s.res).length >= 40) return false;
+    s.res[auteur] = { t: Math.round(t * 10) / 10, date: Number(date) || Date.now() };
     sauver();
     return true;
   }
@@ -54,7 +61,6 @@ const Defis = (function () {
     return "Défi de " + o.a + " ajouté : « " + o.n + " » (" + o.m + ") en " + formatDuree(Math.round(o.t)) + ". Roule ce segment cette semaine pour le battre !";
   }
 
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   function rendre() {
     const c = $("defis-c");
     if (!c) return;
@@ -66,10 +72,10 @@ const Defis = (function () {
     c.innerHTML = cles.map((k) => {
       const s = data.seg[k], l = Object.keys(s.res).map((n) => [n, s.res[n].t]).sort((a, b) => a[1] - b[1]);
       const rang = l.findIndex((x) => x[0] === "Toi");
-      const lignes = l.slice(0, 5).map((x, i) => '<div class="df-l' + (x[0] === "Toi" ? " moi" : "") + '"><span>' + (i + 1) + ". " + esc(x[0] === "Toi" ? "Toi" : x[0]) + "</span><b>" + formatDuree(Math.round(x[1])) + (i ? " <em>+" + Math.round(x[1] - l[0][1]) + " s</em>" : "") + "</b></div>").join("") +
+      const lignes = l.slice(0, 5).map((x, i) => '<div class="df-l' + (x[0] === "Toi" ? " moi" : "") + '"><span>' + (i + 1) + ". " + echapper(x[0] === "Toi" ? "Toi" : x[0]) + "</span><b>" + formatDuree(Math.round(x[1])) + (i ? " <em>+" + Math.round(x[1] - l[0][1]) + " s</em>" : "") + "</b></div>").join("") +
         (rang >= 5 ? '<div class="df-l moi"><span>' + (rang + 1) + ". Toi</span><b>" + formatDuree(Math.round(l[rang][1])) + "</b></div>" : "");
-      return '<div class="df-seg"><div class="df-t"><b>' + esc(s.nom) + "</b><span>" + esc(s.monde || "") + "</span></div>" + lignes +
-        (rang < 0 ? '<div class="info">Pas encore roulé par toi cette semaine : à toi de jouer sur « ' + esc(s.monde || "ce parcours") + " ».</div>" : '<button type="button" class="petit" data-code="' + esc(k) + '">Copier mon code défi</button>') + "</div>";
+      return '<div class="df-seg"><div class="df-t"><b>' + echapper(s.nom) + "</b><span>" + echapper(s.monde || "") + "</span></div>" + lignes +
+        (rang < 0 ? '<div class="info">Pas encore roulé par toi cette semaine : à toi de jouer sur « ' + echapper(s.monde || "ce parcours") + " ».</div>" : '<button type="button" class="petit" data-code="' + echapper(k) + '">Copier mon code défi</button>') + "</div>";
     }).join("");
     c.querySelectorAll("button[data-code]").forEach((b) => b.addEventListener("click", async () => {
       const t = code(b.dataset.code);

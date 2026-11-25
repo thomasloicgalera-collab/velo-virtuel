@@ -18,8 +18,7 @@ const Tour = (function () {
     clm: [["triXS", 10], ["triS", 20], ["prologue", 0], ["polders", 40], ["chronocol", 0], ["alpehuez", 0]]
   };
   // (v96) Grands Tours : 8 étapes (une semaine), 12 et 21 étapes ; deux contre-la-montre, un tiers de montagne ; les mondes se répètent quand la banque est épuisée
-  const grandTour = (n) => { const p = [], clm = n >= 21 ? [0, n - 2] : [0, Math.floor(n * 0.6)]; for (let i = 0; i < n; i++) p.push(clm.includes(i) ? "clm" : i % 3 === 2 || i >= n - 3 ? "montagne" : i % 3 === 1 ? "vallonne" : "plat"); p[n - 1] = i0(p); return p; };
-  const i0 = (p) => "montagne";
+  const grandTour = (n) => { const p = [], clm = n >= 21 ? [0, n - 2] : [0, Math.floor(n * 0.6)]; for (let i = 0; i < n; i++) p.push(clm.includes(i) ? "clm" : i % 3 === 2 || i >= n - 3 ? "montagne" : i % 3 === 1 ? "vallonne" : "plat"); p[n - 1] = "montagne"; return p; };
   const PLANS = { 3: ["plat", "clm", "montagne"], 4: ["plat", "clm", "vallonne", "montagne"], 5: ["plat", "vallonne", "clm", "plat", "montagne"], 8: grandTour(8), 12: grandTour(12), 21: grandTour(21) };
   const NOMS_TOUR = ["Tour des Quatre Vents", "Tour de la Vallée", "Grande Boucle virtuelle", "Tour des Cols et des Plaines", "Ronde des Saisons", "Tour du Home Trainer"];
   const BONIF = [10, 6, 4];
@@ -66,7 +65,6 @@ const Tour = (function () {
   const sprinteurs = () => noms().map((n) => [n, (tour.sprint || {})[n] || 0]).sort((a, b) => b[1] - a[1]);
   const parEquipe = () => tour.enEquipe ? Object.keys(tour.gcEq || {}).map((i) => [parseInt(i, 10), tour.gcEq[i] || 0]).sort((a, b) => a[1] - b[1]) : [];
   const nomEq = (i) => tour.equipes && tour.equipes[i] ? tour.equipes[i].nom : "Équipe " + i;
-  const PTS_CAT = { montee: "pois", sprint: "sprint" };
   const nomEtape = (i) => { const e = tour.etapes[i], m = monde(e.monde); return "Étape " + (i + 1) + " · " + (e.type === "clm" && tour.enEquipe ? "CLM par équipe" : TYPES[e.type]) + " · " + (m ? m.nom : e.monde) + " · " + fr1(e.km).replace(",0", "") + " km"; };
 
   /* ---------- Pendant l'étape ---------- */
@@ -141,10 +139,10 @@ const Tour = (function () {
       return h;
     }, n = long ? 5 : 3;
     const g = general(), p = grimpeurs().filter((x) => x[1] > 0), v = sprinteurs().filter((x) => x[1] > 0), eq = parEquipe();
-    let h = '<div class="tr-gc"><div class="tt">Classement général</div>' + top(g, (x, k) => k === 0 ? formatDuree(x[1]) : fmtEcart(x[1] - g[0][1]), (x) => x[0] === "Toi", (x, k) => (k === 0 ? '<span class="mj jaune"></span>' : "") + x[0], n) + "</div>";
-    if (p.length) h += '<div class="tr-gc"><div class="tt">Meilleur grimpeur</div>' + top(p, (x) => x[1] + " pts", (x) => x[0] === "Toi", (x, k) => (k === 0 ? '<span class="mj pois"></span>' : "") + x[0], n) + "</div>";
-    if (v.length) h += '<div class="tr-gc"><div class="tt">Meilleur sprinteur</div>' + top(v, (x) => x[1] + " pts", (x) => x[0] === "Toi", (x, k) => (k === 0 ? '<span class="mj vert"></span>' : "") + x[0], n) + "</div>";
-    if (eq.length) h += (extra || "") + '<div class="tr-gc"><div class="tt">Classement par équipe (3 meilleurs temps · CLM par équipe : temps de l’équipe compté 3 fois)</div>' + top(eq, (x, k) => k === 0 ? formatDuree(x[1]) : fmtEcart(x[1] - eq[0][1]), (x) => x[0] === 0, (x) => nomEq(x[0]), n) + "</div>";
+    let h = '<div class="tr-gc"><div class="tt">Classement général</div>' + top(g, (x, k) => k === 0 ? formatDuree(x[1]) : fmtEcart(x[1] - g[0][1]), (x) => x[0] === "Toi", (x, k) => (k === 0 ? '<span class="mj jaune"></span>' : "") + echapper(x[0]), n) + "</div>";
+    if (p.length) h += '<div class="tr-gc"><div class="tt">Meilleur grimpeur</div>' + top(p, (x) => x[1] + " pts", (x) => x[0] === "Toi", (x, k) => (k === 0 ? '<span class="mj pois"></span>' : "") + echapper(x[0]), n) + "</div>";
+    if (v.length) h += '<div class="tr-gc"><div class="tt">Meilleur sprinteur</div>' + top(v, (x) => x[1] + " pts", (x) => x[0] === "Toi", (x, k) => (k === 0 ? '<span class="mj vert"></span>' : "") + echapper(x[0]), n) + "</div>";
+    if (eq.length) h += (extra || "") + '<div class="tr-gc"><div class="tt">Classement par équipe (3 meilleurs temps · CLM par équipe : temps de l’équipe compté 3 fois)</div>' + top(eq, (x, k) => k === 0 ? formatDuree(x[1]) : fmtEcart(x[1] - eq[0][1]), (x) => x[0] === 0, (x) => echapper(nomEq(x[0])), n) + "</div>";
     return h;
   }
 
@@ -180,14 +178,14 @@ const Tour = (function () {
     tour.res[i] = { classement: l.map(([n, t]) => [n, Math.round(t * 10) / 10]), pts, ptsV, eq: eqRes, date: Date.now() };
     if (tour.res.filter(Boolean).length >= tour.etapes.length) tour.fini = true;
     ecrire();
-    const rang = te ? 1 + Object.keys(te).filter((q) => te[q] < te[0] - 0.001).length : l.findIndex((x) => x[0] === "Toi") + 1, g = general(), rg = g.findIndex((x) => x[0] === "Toi") + 1, p = grimpeurs();
+    const rang = te ? 1 + Object.keys(te).filter((q) => te[q] < te[0] - 0.001).length : l.findIndex((x) => x[0] === "Toi") + 1, g = general(), rg = g.findIndex((x) => x[0] === "Toi") + 1;
     log("Tour « " + tour.nom + " », " + nomEtape(i) + " : " + rang + "e de l’étape, " + rg + "e du général.");
-    let h = '<div class="rf-tour"><h3>' + tour.nom + " · " + nomEtape(i) + "</h3>";
-    h += "<div>" + (te ? "Étape par équipe : <b>" + (rang === 1 ? "victoire !" : rang + "e sur " + Object.keys(te).length) : "Étape : <b>" + (rang === 1 ? "victoire !" : rang + "e")) + "</b>" + (rang > 1 ? " à " + fmtEcart((te ? te[0] : moi.fini) - l[0][1]) + (te ? " de l’équipe gagnante" : " de " + l[0][0]) : "") + (e.type !== "clm" && rang <= 3 ? " (bonification de " + BONIF[rang - 1] + " s)" : "") +
+    let h = '<div class="rf-tour"><h3>' + echapper(tour.nom + " · " + nomEtape(i)) + "</h3>";
+    h += "<div>" + (te ? "Étape par équipe : <b>" + (rang === 1 ? "victoire !" : rang + "e sur " + Object.keys(te).length) : "Étape : <b>" + (rang === 1 ? "victoire !" : rang + "e")) + "</b>" + (rang > 1 ? " à " + fmtEcart((te ? te[0] : moi.fini) - l[0][1]) + (te ? " de l’équipe gagnante" : " de " + echapper(l[0][0])) : "") + (e.type !== "clm" && rang <= 3 ? " (bonification de " + BONIF[rang - 1] + " s)" : "") +
       (pts.Toi ? " · " + pts.Toi + " pts au sommet des montées" : "") + "</div>";
     h += "<div>Classement général : <b>" + (rg === 1 ? "1er" : rg + "e") + "</b>" + (rg > 1 ? " à " + fmtEcart(tour.gc.Toi - g[0][1]) : (tour.fini ? " : tu gagnes le Tour !" : rangAvant === 1 && tour.res.filter(Boolean).length > 1 ? " : tu gardes le maillot jaune !" : " : tu prends le maillot jaune !")) + (rangAvant && rg < rangAvant && rg > 1 ? " (tu gagnes " + (rangAvant - rg) + " place" + (rangAvant - rg > 1 ? "s" : "") + ")" : "") + "</div>";
     h += blocClassements(true, rangEtapeEq(eqRes));
-    h += tour.fini ? "<div><b>Tour terminé !</b> Vainqueur : " + (g[0][0] === "Toi" ? "toi, bravo !" : g[0][0]) + ".</div>" : "<div>Prochaine étape : " + nomEtape(prochaine()) + ".</div>";
+    h += tour.fini ? "<div><b>Tour terminé !</b> Vainqueur : " + (g[0][0] === "Toi" ? "toi, bravo !" : echapper(g[0][0])) + ".</div>" : "<div>Prochaine étape : " + echapper(nomEtape(prochaine())) + ".</div>";
     return h + "</div>";
   }
 
@@ -206,11 +204,11 @@ const Tour = (function () {
       $("tour-creer").onclick = () => { creer(parseInt($("tour-nb").value, 10), $("peloton-niveau").value, Peloton.MAX_IA, $("tour-equipe").checked); rendre(); majResumeChoix(); };
       return;
     }
-    const ip = prochaine(), g = general(), p = grimpeurs(), rg = g.findIndex((x) => x[0] === "Toi") + 1;
-    let h = "<b>" + tour.nom + "</b>" + (tour.fini ? " · terminé" : "") + '<div class="tr-etapes">';
+    const ip = prochaine();
+    let h = "<b>" + echapper(tour.nom) + "</b>" + (tour.fini ? " · terminé" : "") + '<div class="tr-etapes">';
     tour.etapes.forEach((e, i) => {
       const r = tour.res[i], place = r ? r.classement.findIndex((x) => x[0] === "Toi") + 1 : 0;
-      h += '<div class="' + (r ? "faite" : i === ip ? "prochaine" : "") + '"><span>' + (r ? "✓ " : i === ip ? "▶ " : "") + nomEtape(i) + "</span><b>" + (r ? (place === 1 ? "1er" : place + "e") : i === ip ? "à courir" : "") + "</b></div>";
+      h += '<div class="' + (r ? "faite" : i === ip ? "prochaine" : "") + '"><span>' + (r ? "✓ " : i === ip ? "▶ " : "") + echapper(nomEtape(i)) + "</span><b>" + (r ? (place === 1 ? "1er" : place + "e") : i === ip ? "à courir" : "") + "</b></div>";
     });
     h += "</div>";
     if (tour.res.length) h += blocClassements(false);

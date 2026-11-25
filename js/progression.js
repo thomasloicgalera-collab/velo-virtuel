@@ -294,7 +294,7 @@ const Progression = (function () {
     const d = balade.distance, L = route.longueur;
     let html = "";
     const c = seg.enCours.length ? seg.enCours[seg.enCours.length - 1] : null;
-    const titre = (sg) => '<div class="sg-t" style="--c:' + TYPES_SEG[sg.type].coul + '"><span>' + TYPES_SEG[sg.type].ico + "</span>" + sg.nom + "</div>";
+    const titre = (sg) => '<div class="sg-t" style="--c:' + TYPES_SEG[sg.type].coul + '"><span>' + TYPES_SEG[sg.type].ico + "</span>" + echapper(sg.nom) + "</div>";
     if (c) {
       const lg = c.sg.e - c.sg.s, fait = Math.min(1, Math.max(0, (d - c.abs) / lg)), el = balade.temps - c.t0, rec = records[c.sg.cle];
       const tr = rec ? tempsTrace(rec.m, d - c.abs, rec.t, c.sg.e - c.sg.s) : null, ec = rec ? el - (tr !== null ? tr : rec.t * fait) : null;
@@ -306,7 +306,7 @@ const Progression = (function () {
       html = titre(f.sg) + '<div class="sg-l"><b>' + fmtSeg(f.t) + "</b>" + (f.rec !== null ? '<em class="' + (f.bat ? "bon" : "mal") + '">' + fmtEcart(f.t - f.rec) + "</em>" : "") + "</div>" +
         '<div class="sg-s">' + (f.bat ? "Nouveau record !" : f.premier ? "Premier passage : c’est ton record" : "Record " + fmtSeg(f.rec)) + (cl.length > 1 ? " · " + rang + (rang === 1 ? "er" : "e") + " sur " + cl.length : "") + "</div>";
       if (cl.length > 1) {
-        cl.slice(0, 4).forEach((x, i) => { html += '<div class="sg-r' + (x.user ? " moi" : "") + '"><i style="background:' + hex6(x.couleur) + '"></i><span>' + (i + 1) + ". " + x.nom + "</span><b>" + fmtSeg(x.t) + "</b></div>"; });
+        cl.slice(0, 4).forEach((x, i) => { html += '<div class="sg-r' + (x.user ? " moi" : "") + '"><i style="background:' + hex6(x.couleur) + '"></i><span>' + (i + 1) + ". " + echapper(x.nom) + "</span><b>" + fmtSeg(x.t) + "</b></div>"; });
         if (rang > 4) html += '<div class="sg-r moi"><i style="background:#ff7a2f"></i><span>' + rang + ". Toi</span><b>" + fmtSeg(f.t) + "</b></div>";
       }
     } else if (seg.liste.length && L > 0 && balade.temps > 0) {
@@ -462,15 +462,15 @@ const Progression = (function () {
       return '<div class="pg-badge' + (ok ? " ok" : "") + '" title="' + b.desc + '"><i>' + b.ico + "</i><b>" + b.nom + "</b><span>" + (ok ? "Obtenu le " + new Date(ok).toLocaleDateString("fr-FR") : b.desc) + "</span></div>";
     }).join("") + "</div>";
     h += htmlMateriel();
-    const parMonde = {};
+    const parMonde = Object.create(null);   // (v104) un parcours nommé « constructor » ne casse plus la liste
     for (const k in records) { const r = records[k]; (parMonde[r.monde] = parMonde[r.monde] || []).push(r); }
     h += "<h3>Records des segments</h3>";
     const mondes = Object.keys(parMonde);
     if (!mondes.length) h += '<p class="pg-petit">Pas encore de record : les segments chronométrés (sprints ⚡, montées ⛰, secteurs ⚪) sont annoncés en roulant, avec une banderole au départ et à l’arrivée.</p>';
     for (const m of mondes) {
-      h += '<div class="pg-monde">' + m + "</div>";
+      h += '<div class="pg-monde">' + echapper(m) + "</div>";
       parMonde[m].sort((a, b) => a.nom.localeCompare(b.nom)).forEach((r) => {
-        h += '<div class="pg-rec"><span>' + (TYPES_SEG[r.type] || TYPES_SEG.sprint).ico + " " + r.nom + "</span><b>" + fmtSeg(r.t) + "</b><em>" + new Date(r.date).toLocaleDateString("fr-FR") + "</em></div>";
+        h += '<div class="pg-rec"><span>' + (TYPES_SEG[r.type] || TYPES_SEG.sprint).ico + " " + echapper(r.nom) + "</span><b>" + fmtSeg(r.t) + "</b><em>" + new Date(r.date).toLocaleDateString("fr-FR") + "</em></div>";
       });
     }
     const f = $("progression");
@@ -506,7 +506,7 @@ const Progression = (function () {
     h += "</div>";
     if (g.journal.length) {
       h += "<h3 style=\"margin:6px 0\">Segments</h3>";
-      for (const j of g.journal) h += '<div class="rf-l' + (j.record || j.premier ? " best" : "") + '"><span>' + TYPES_SEG[j.type].ico + " " + j.nom + (j.record ? " · nouveau record (" + fmtEcart(j.t - j.ancien) + ")" : j.premier ? " · premier passage" : "") + "</span><b>" + fmtSeg(j.t) + "</b></div>";
+      for (const j of g.journal) h += '<div class="rf-l' + (j.record || j.premier ? " best" : "") + '"><span>' + TYPES_SEG[j.type].ico + " " + echapper(j.nom) + (j.record ? " · nouveau record (" + fmtEcart(j.t - j.ancien) + ")" : j.premier ? " · premier passage" : "") + "</span><b>" + fmtSeg(j.t) + "</b></div>";
     }
     return h;
   }

@@ -263,7 +263,13 @@ function reinitialiserSeance() {
   majBoutonBalade(); majStats(); lancerPeloton();
 }
 
+let finEnCours = false;                                          // (v104) un double clic ne termine pas la sortie deux fois
 $("btn-export").addEventListener("click", async () => {
+  if (finEnCours) return;
+  finEnCours = true;
+  try { await terminerSortie(); } finally { finEnCours = false; }
+});
+async function terminerSortie() {
   if (session.samples.length < 10) { log("Séance trop courte pour être exportée (10 secondes minimum)."); return; }
   balade.enCours = false; balade.auto = false; majBoutonBalade();
   const id = session.debut;
@@ -288,7 +294,7 @@ $("btn-export").addEventListener("click", async () => {
   } else {
     log("Le fichier .FIT est téléchargé, mais la séance n’a pas pu être ajoutée à l’historique.");
   }
-});
+}
 
 $("btn-abandon").addEventListener("click", async () => {
   if (session.samples.length > 0 && !confirm("Abandonner cette séance sans l’enregistrer ? Les données seront perdues.")) return;
@@ -371,13 +377,17 @@ document.addEventListener("keydown", (e) => {
    réglages, progression, records, séances importées et plan (localStorage « velo… »), historique des séances
    et mondes GPX (IndexedDB ; décor téléchargé seulement si la case est cochée, sinon le tracé seul)
    ===================================================================== */
+// (v104) jamais dans une sauvegarde : la clé d'accès Nolio (le fichier peut être partagé), ni son envoi automatique (un fichier piégé
+// pourrait sinon faire partir tes sorties vers le compte de quelqu'un d'autre)
+const CLES_PRIVEES = ["velo_nolio_jeton", "velo_nolio_auto"];
+const cleSauvegardable = (k) => /^velo/.test(k) && !CLES_PRIVEES.includes(k);
 const lireTout = (nom) => transaction([nom], "readonly", (t, set) => { const q = t.objectStore(nom).getAll(); q.onsuccess = () => set(q.result); });
 $("btn-sauvegarder").addEventListener("click", async () => {
   const msg = $("msg-sauvegarde");
   msg.textContent = "Préparation de la sauvegarde…";
   try {
     const local = {};
-    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^velo/.test(k)) local[k] = localStorage.getItem(k); }
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (cleSauvegardable(k)) local[k] = localStorage.getItem(k); }
     const s = { format: "velo-virtuel-sauvegarde", version: 1, date: Date.now(), local, resumes: [], donnees: [], mondes: [] };
     if (base) {
       s.resumes = (await lireTout("resumes")) || [];
@@ -404,7 +414,7 @@ $("fichier-sauvegarde").addEventListener("change", async (e) => {
     const nbS = (s.resumes || []).length;
     if (!confirm("Restaurer la sauvegarde du " + new Date(s.date).toLocaleDateString("fr-FR") + " ?\n\nTes réglages, ta progression et tes records seront remplacés par ceux de la sauvegarde ; les séances (" + nbS + ") et les mondes de la sauvegarde seront ajoutés à ceux déjà présents. La page sera ensuite rechargée.")) return;
     msg.textContent = "Restauration en cours…";
-    for (const k in s.local) if (/^velo/.test(k)) localStorage.setItem(k, s.local[k]);
+    for (const k in s.local) if (cleSauvegardable(k) && typeof s.local[k] === "string") localStorage.setItem(k, s.local[k]);
     if (base) {
       if ((s.resumes || []).length || (s.donnees || []).length) await transaction(["resumes", "donnees"], "readwrite", (t) => {
         for (const r of s.resumes || []) t.objectStore("resumes").put(r);

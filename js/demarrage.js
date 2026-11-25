@@ -115,7 +115,7 @@ function dessinPolygones() {
   o += '<path d="M100,92 L100,192" stroke="' + AC + '" stroke-width="1.6" opacity=".7"/>';
   o += duo("M69,184 L100,184 L100,196 C86,198 74,196 68,194 Z", B);
   // cou et tête
-  o += duo("M92,72 L92,92 C95,98 98,99 100,99 L100,72 Z", sh(P, -0.14) === "" ? P : P);
+  o += duo("M92,72 L92,92 C95,98 98,99 100,99 L100,72 Z", P);
   o += '<ellipse cx="100" cy="46" rx="19.5" ry="25" fill="' + gr(P) + '"/>';
   o += '<ellipse cx="80.5" cy="48" rx="3.4" ry="6" fill="' + sh(P, -0.08) + '"/><ellipse cx="119.5" cy="48" rx="3.4" ry="6" fill="' + sh(P, -0.08) + '"/>';
   // visage
@@ -277,7 +277,7 @@ function tirerAmbiance(appliquer) {
   if (r.son === false) $("son-actif").checked = false;
   if (r.volume !== undefined) $("son-volume").value = r.volume;
   appliquerSon();
-  if (r.affiche3d === false) { $("affiche-3d").checked = false; $("monde-conteneur").hidden = true; }
+  $("affiche-3d").checked = true;   // (v104) la vue 3D reste affichée : la case, cachée depuis longtemps, pouvait la masquer pour de bon d'après un très vieux réglage
   seance.intervalles = Array.isArray(r.intervalles) ? r.intervalles : [];
   if (!seance.intervalles.length) seance.intervalles = blocsVersIntervalles(BIBLIO[1].blocs);
   balade.altitude = route.alt0;

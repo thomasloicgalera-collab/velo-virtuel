@@ -84,7 +84,7 @@ const Createur = (function () {
     if (!nom) { let k = 1; while (seancesImportees.some((s) => s.nom === "Ma séance " + k)) k++; nom = "Ma séance " + k; $("crea-nom").value = nom; }
     seancesImportees = seancesImportees.filter((s) => s.nom !== nom);      // même nom : la nouvelle version remplace l'ancienne
     seancesImportees.unshift({ nom, ints, textes: [], cree: JSON.parse(JSON.stringify(lignes)) });
-    seancesImportees = seancesImportees.slice(0, 40);
+    seancesImportees = seancesImportees.slice(0, MAX_SEANCES);
     sauverImportees(); rendreBiblio();
     $("crea-msg").textContent = "« " + nom + " » enregistrée (" + formatDuree(Math.round(statsSeance(ints).sec)) + ").";
     log("Séance créée : " + nom + ".");

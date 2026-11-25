@@ -37,8 +37,6 @@ const HudPerso = (() => {
     fcmoy: { nom: "Fréquence cardiaque moyenne", court: "BPM MOY", val: () => (St.nh ? Math.round(St.sh / St.nh) : "–") }
   };
   const ordre = Object.keys(METRIQUES);
-  const TEINTES = ["rgba(58,44,128,.62)", "rgba(120,66,22,.58)", "rgba(40,52,120,.6)", "rgba(90,40,56,.6)"];
-  const COUL = ["#B9A8FF", "#FFB070", "#9DB6FF", "#FF93A6"];
 
   function options(sel, courant) {
     sel.innerHTML = ordre.map((k) => '<option value="' + k + '"' + (k === courant ? " selected" : "") + ">" + METRIQUES[k].nom + "</option>").join("");

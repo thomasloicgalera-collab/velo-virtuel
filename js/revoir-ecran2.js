@@ -94,7 +94,7 @@ const Ecran2 = (function () {
   let w = null, cache = false;
   const TUILES = [["hz-w", "Puissance", "W"], ["hz-fc", "Fréquence cardiaque", "bpm"], ["hz-cad", "Cadence", "tr/min"], ["hz-vit", "Vitesse", "km/h"],
     ["hz-temps", "Temps", ""], ["hz-dist", "Distance", "km"], ["hz-deniv", "Dénivelé", "m D+"], ["hz-pente", "Pente", ""]];
-  const CANVAS = [["hz-profil-c", "profil"], ["hz-carte-c", "carte"], ["hz-spark", "spark"]];
+  const CANVAS = [["hz-profil-c", "profil"], ["hz-carte-c", "carte"]];
   const HTML = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Vélo virtuel · tableau de bord</title><style>' +
     "html,body{margin:0;height:100%;background:#0d131c;color:#fff;font-family:system-ui,-apple-system,Segoe UI,sans-serif}" +
     "body{display:grid;grid-template-columns:1fr 22em;grid-template-rows:auto auto 1fr auto;gap:12px;padding:14px;box-sizing:border-box}" +
@@ -125,6 +125,23 @@ const Ecran2 = (function () {
     log("Deuxième écran ouvert : glisse la fenêtre sur ton autre écran.");
     maj();
   }
+  // puissance des 60 dernières secondes (barres à la couleur de la zone, trait = FTP)
+  function courbePuissance(c) {
+    if (c.width !== 900 || c.height !== 144) { c.width = 900; c.height = 144; }
+    const W = c.width, H = c.height, x = c.getContext("2d"), f = ftp();
+    x.clearRect(0, 0, W, H);
+    const s = session.samples, n = 60, deb = Math.max(0, s.length - n), bw = W / n;
+    let mx = f * 1.5;
+    for (let i = deb; i < s.length; i++) mx = Math.max(mx, s[i].p || 0);
+    x.fillStyle = "rgba(255,255,255,.18)"; x.fillRect(0, H - H * f / mx, W, 2);
+    for (let i = deb; i < s.length; i++) {
+      const v = s[i].p || 0, h = Math.max(2, H * v / mx), k = i - (s.length - n);
+      x.fillStyle = ZONES_P[indexZone(ZONES_P, v / f)].couleur;
+      x.globalAlpha = 0.45 + 0.55 * (k / n);
+      x.fillRect(k * bw + 1, H - h, Math.max(1, bw - 2), h);
+    }
+    x.globalAlpha = 1;
+  }
   function maj() {
     if (!w) return;
     if (w.closed) { w = null; if (cache) { cache = false; $("hud-zone").classList.remove("hud-cache"); } return; }
@@ -139,6 +156,7 @@ const Ecran2 = (function () {
     if (P.innerHTML !== pel) P.innerHTML = pel;
     if (S.innerHTML !== seg) S.innerHTML = seg;
     P.style.display = pel ? "" : "none"; S.style.display = seg ? "" : "none";
+    courbePuissance(D.getElementById("spark"));
     for (const [src, dst] of CANVAS) {
       const a = $(src), b = D.getElementById(dst);
       if (!a.width || !a.height) continue;

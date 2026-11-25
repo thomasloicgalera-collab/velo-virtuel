@@ -18,22 +18,38 @@ function construireRoute(nom, segments, boucle, alt0) {
 }
 let route = construireRoute("Parcours plat (sans dénivelé)", [[5000, 0], [5000, 0]], true, 0);
 
-function penteA(distance) {
-  let d = route.boucle ? distance % route.longueur : Math.min(distance, route.longueur - 0.01);
-  for (const [l, p] of route.segments) { if (d < l) return p; d -= l; }
-  return 0;
+/* (v104) pente et altitude à une distance donnée : une table est calculée une fois par parcours, puis le tronçon est trouvé en coupant
+   la liste en deux à chaque pas. Avant, tout le tracé était reparcouru à chaque appel (plus de 5 000 appels par seconde en course) :
+   sur les longs parcours réels, environ 7 % du processeur au Mont Ventoux (1 342 tronçons). Les résultats sont les mêmes. */
+const tablesRoute = new WeakMap();
+function tableRoute(r) {
+  let T = tablesRoute.get(r);
+  if (T && T.seg === r.segments && T.n === r.segments.length && T.alt0 === r.alt0) return T;
+  const seg = r.segments, n = seg.length, fin = new Float64Array(n), alt = new Float64Array(n + 1);
+  let x = 0, a = r.alt0;
+  alt[0] = a;
+  for (let i = 0; i < n; i++) { x += seg[i][0]; a += seg[i][0] * seg[i][1] / 100; fin[i] = x; alt[i + 1] = a; }
+  T = { seg, n, alt0: r.alt0, fin, alt };
+  tablesRoute.set(r, T);
+  return T;
 }
-function altitudeA(distance) {
-  let reste = route.boucle ? distance % route.longueur : Math.min(distance, route.longueur);
-  let alt = route.alt0;
-  for (const [l, p] of route.segments) {
-    const part = Math.min(reste, l);
-    alt += part * p / 100;
-    reste -= part;
-    if (reste <= 0) break;
-  }
-  return alt;
+function rangTroncon(T, d) {          // premier tronçon qui se termine après d (T.n si d est au-delà du tracé)
+  let a = 0, b = T.n;
+  while (a < b) { const m = (a + b) >> 1; if (d < T.fin[m]) b = m; else a = m + 1; }
+  return a;
 }
+function penteRoute(r, distance) {
+  const d = r.boucle ? distance % r.longueur : Math.min(distance, r.longueur - 0.01);
+  const T = tableRoute(r), i = rangTroncon(T, d);
+  return i < T.n ? r.segments[i][1] : 0;
+}
+function altitudeRoute(r, distance) {
+  const d = r.boucle ? distance % r.longueur : Math.min(distance, r.longueur);
+  const T = tableRoute(r), i = rangTroncon(T, d);
+  return i < T.n ? T.alt[i] + (d - (i ? T.fin[i - 1] : 0)) * r.segments[i][1] / 100 : T.alt[T.n];
+}
+function penteA(distance) { return penteRoute(route, distance); }
+function altitudeA(distance) { return altitudeRoute(route, distance); }
 function majInfoParcours() {
   $("info-parcours").textContent = route.nom + " : " + (route.longueur / 1000).toFixed(1).replace(".", ",") +
     " km, dénivelé positif " + Math.round(route.dplus) + " m" + (route.boucle ? " (parcours en boucle)" : "");
@@ -52,6 +68,7 @@ function routeDepuisGpx(texte, nom) {
   if (doc.querySelector("parsererror")) throw new Error("le fichier n’est pas un GPX valide.");
   let pts = Array.from(doc.querySelectorAll("trkpt"));
   if (pts.length < 2) pts = Array.from(doc.querySelectorAll("rtept"));
+  pts = pts.filter((p) => isFinite(parseFloat(p.getAttribute("lat"))) && isFinite(parseFloat(p.getAttribute("lon"))));
   if (pts.length < 2) throw new Error("aucun tracé trouvé dans ce fichier.");
 
   const lat = [], lon = [], ele = [];
@@ -170,7 +187,7 @@ const Aero = (function () {
   const DENSITE_PAR_160M = 0.02;                           // l'air s'allège de 2 % tous les 160 m de montée
   const VENT_SOL = 0.6;                                    // 60 % du vent météo à 1 m du sol
   const ABRI_VILLE = 0.45;                                 // entre les maisons, le vent est bien plus faible
-  const ASPIRATION_MAX = 0.32, ASPIRATION_VEHICULE = 0.45; // dans la roue d'un équipier / derrière un tracteur ou un véhicule
+  const ASPIRATION_MAX = 0.32;                             // réduction maximale de la traînée dans la roue d'un autre coureur
   const VENT_METEO = { clair: 3.5, nuageux: 5.5, brume: 2.2, pluie: 7, orage: 11 };   // m/s selon la météo du monde
   const reg = { vent: true, materiel: 0, velo: 0, masseVelo: 8, clm: false, groupe: 0, frein: true };   // frein : (v69 suite) freinage automatique avant les virages serrés   // velo : gain d'air du vélo et des roues ; masseVelo : leur poids (kg) ; groupe : 0 à 1 (vélo de chrono en groupe)
   const v = { dir: Math.random() * 6.283, vit: 3, t: 0, etat: "", face: 0 };
@@ -204,7 +221,7 @@ const Aero = (function () {
   const densite = (alt) => 1.226 * Math.pow(1 - DENSITE_PAR_160M, Math.max(0, alt || 0) / 160);
   const roulement = (revetement, pluie) => (CRR[revetement] || CRR.bitume) * (pluie ? PLUIE_CRR : 1);
   const cdaUtilisateur = () => CDA * (1 - reg.materiel - reg.velo * (reg.clm ? 1 - MALUS_CLM_AIR * reg.groupe : 1));
-  return { reg, v, maj, vecteur, ventDeFace, facteurAspiration, densite, roulement, cdaUtilisateur, CDA, ASPIRATION_VEHICULE, VENT_METEO };
+  return { reg, v, maj, vecteur, ventDeFace, facteurAspiration, densite, roulement, cdaUtilisateur, CDA };
 })();
 
 /* =====================================================================
@@ -551,7 +568,7 @@ const Peloton = (function () {
   }
   // jeu de peloton : se mettre dans la roue de celui qui précède (coureur virtuel ou utilisateur), prendre des relais à tour de rôle,
   // suivre ou chasser une attaque tant que la réserve le permet, décrocher sinon, et attendre le groupe quand on est seul devant et fatigué
-  const ROUE = 2.3, PASSAGE = 100;                                            // PASSAGE : points de chrono du contre-la-montre (m)                                                           // écart visé derrière la roue (m)
+  const ROUE = 2.3, PASSAGE = 100;     // ROUE : écart visé derrière la roue (m) ; PASSAGE : points de chrono du contre-la-montre (m)
   const RELAIS = { grimpeur: 25, sprinteur: 10, baroudeur: 50, puncheur: 30 }; // durée d'un relais en tête (s)
   function jeuPeloton(r, p, frac, finale, dt) {
     const cp = cpEff(r), f = Math.max(0, r.wbal) / r.wp, tous = coureurs.concat(user.vue ? [user] : []);
@@ -936,7 +953,9 @@ function avancer(dt, puissance, pente) {
   condAir.abri = Peloton.actif() && (Peloton.mode() !== "clm" || Peloton.ttt()) ? Peloton.abriPour(balade.distance, 0.9) : 1;   // contre-la-montre : pas d'aspiration (sauf par équipe : abri de tes coéquipiers)
   if (typeof Groupe !== "undefined" && Groupe.actif() && $("peloton-mode").value !== "clm" && !(Peloton.actif() && Peloton.mode() === "clm")) condAir.abri = Math.min(condAir.abri, Groupe.abriPour(balade.distance));   // (v71) derrière un ami
   // vélo de chrono en groupe : malus progressif (environ 1,5 s pour se relever ou se remettre en position)
-  const enGroupe = Aero.reg.clm && Peloton.actif() && !Peloton.ttt() && Peloton.procheDe(balade.distance, GROUPE_DIST) ? 1 : 0;   // (v87) CLM par équipe : on reste en position allongée dans la file
+  // (v104) un ami de la sortie de groupe tout près compte comme un coureur virtuel (avant : aucun malus du vélo de chrono dans sa roue)
+  const amiProche = Aero.reg.clm && typeof Groupe !== "undefined" && Groupe.actif() && Groupe.positions().some((a) => Math.abs(a.d - balade.distance) < GROUPE_DIST);
+  const enGroupe = Aero.reg.clm && !Peloton.ttt() && ((Peloton.actif() && Peloton.procheDe(balade.distance, GROUPE_DIST)) || amiProche) ? 1 : 0;   // (v87) CLM par équipe : on reste en position allongée dans la file
   Aero.reg.groupe += (enGroupe - Aero.reg.groupe) * Math.min(1, dt * 0.7);
   if (Aero.reg.clm) condAir.abri = 1 - (1 - condAir.abri) * (1 - MALUS_CLM_ABRI * Aero.reg.groupe);
   const air = balade.vitesse + condAir.ventFace;       // vitesse de l'air par rapport au cycliste
@@ -982,7 +1001,6 @@ function majTexteDescente() {
   $("difficulte-desc-val").innerHTML = v + "&nbsp;% : une descente à −8&nbsp;% est envoyée au home trainer comme −" + fr1(8 * facteurDescente() * RESISTANCE_PLUS).replace(",0", "") + "&nbsp;%. Plus le réglage est haut, plus tu gardes de résistance.";
 }
 
-/* (v72) la résistance du home trainer varie toujours sur les pavés et le gravier ; la case « Vibrations » ne règle plus que les secousses de la caméra */
 /* (v82) plus de vibrations de la résistance sur les pavés et le gravier : la pente envoyée est toujours la vraie */
 function envoyerPente() { envoyerPenteValeur(penteEnvoyee()); }
 /* Commande « simulation » du home trainer (FTMS 0x11) : vent, pente, résistance au roulement et à l'air, avec les mêmes

@@ -368,14 +368,13 @@ const Monde3D = (function () {
     return c;
   }
 
-  let reelObjets = [], reelAFaire = false, solInfo = null;
+  let reelObjets = [], reelAFaire = false;
   function viderReel() {
     for (const o of reelObjets) {
       scene.remove(o);
       jeter(o);
     }
     reelObjets = [];
-    solInfo = null;
   }
   function ajouterReel(o) { o.frustumCulled = false; scene.add(o); reelObjets.push(o); return o; }
   // libère la mémoire d'un objet retiré de la scène, sans toucher aux formes et textures partagées du décor Blender (réutilisées ailleurs)
@@ -980,7 +979,6 @@ const Monde3D = (function () {
         ajouterReel(mc); ajouterReel(mk);
       }
     }
-    solInfo = { r: r, nx: nx, nz: nz, arbres: pris.length };
   }
 
   function construireBarrieres(bars, hSol, distCh) {
@@ -1629,7 +1627,6 @@ const Monde3D = (function () {
     g.scale(sx, sy, sz); g.translate(x, y, z);
     return g;
   }
-  function cone(r, h, y) { const g = new T.ConeGeometry(r, h, 9); g.translate(0, y, 0); return g; }
   // feuillu : une couronne faite de sept touffes de tailles différentes (plus sombres en bas), sommet vers 5,4 m
   const geoFeuillus = () => ajouterDegrade(fusionner([
     lobe(1.35, 0, 3.3, 0, 1.15, 0.95, 1.1),
@@ -2192,8 +2189,8 @@ const Monde3D = (function () {
   }
 
   // ===== corps réaliste : maillage d'un vrai modèle 3D, déformé sur le processeur (skinning) pour suivre le pédalage =====
-  let Modele = null, ModeleH = null, ModeleF = null;
-  // nouveau corps réaliste disponible pour le genre choisi (homme ou femme MakeHuman) ; sinon, l'ancien modèle
+  let ModeleH = null, ModeleF = null;
+  // corps réaliste disponible pour le genre choisi (homme ou femme MakeHuman) ; sinon, les formes simples
   const corpsReel = () => !!corps.modeleH && (genre === "homme" || !!ModeleF);
   function fabriquerModele(DATA, ech) {
     const dec = (b, Arr) => { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new Arr(u.buffer); };
@@ -2232,7 +2229,6 @@ const Monde3D = (function () {
     function regler(i, M, R, B, N) { for (let k = 0; k < 9; k++) { mat[i * 9 + k] = M[k]; rot[i * 9 + k] = R[k]; } for (let k = 0; k < 3; k++) { pb[i * 3 + k] = B[k]; pn[i * 3 + k] = N[k]; } }
     const appl = (M, v) => [M[0] * v[0] + M[1] * v[1] + M[2] * v[2], M[3] * v[0] + M[4] * v[1] + M[5] * v[2], M[6] * v[0] + M[7] * v[1] + M[8] * v[2]];
     const miroir = (v) => [-v[0], v[1], v[2]];
-    const COTE = [0, 1];   // 0 : x<0 (côté de k=0), 1 : x>0
 
     // p : { genre, P2, N2, pitch[2], cheville[2], poignet[2], mainDir, polesJambe[2], polesBras[2], g }
     function poser(p, sortiePos, sortieNor) {
@@ -2254,7 +2250,7 @@ const Monde3D = (function () {
       const porteTorse = (v) => add(p.P2, appl(At, sub(v, P)));
       const info = [];
       for (let k = 0; k < 2; k++) {
-        const sg = k ? 1 : -1, m = (v) => (k ? v : miroir(v));
+        const m = (v) => (k ? v : miroir(v));
         const H = m(J.H), K = m(J.K), A = m(J.A), S = m(J.S), E = m(J.E), W = m(J.W), Hd = m(J.Hd);
         // jambe
         const H2 = portePelvis(H), l1 = g * len(sub(K, H)), l2 = g * len(sub(A, K));
@@ -2312,7 +2308,6 @@ const Monde3D = (function () {
     }
     return { NV, sets, poser };
   }
-  try { Modele = fabriquerModele(MODELE_DATA, 5e-5); } catch (e) { Modele = null; console.warn("modèle 3D indisponible", e); }
   // corps d'homme réaliste (MakeHuman, domaine public) : js/modele-homme.js
   try {
     if (typeof MODELE_H !== "undefined") ModeleH = fabriquerModele({ N: MODELE_H.N, n: MODELE_H.n, g1: MODELE_H.g1, g2: MODELE_H.g2, w: MODELE_H.w, homme: { p: MODELE_H.p, tri: MODELE_H.tri, counts: MODELE_H.counts, j: MODELE_H.j } }, MODELE_H.e);
@@ -3040,16 +3035,6 @@ const Monde3D = (function () {
       for (const k in j) cycliste.add(j[k]);
       jambes.push(j);
     }
-    // corps réaliste : un seul maillage, 7 matières (peau, maillot, cuissard, gants, chaussures, bas de jambe, chaussettes)
-    if (Modele) {
-      const posA = new T.BufferAttribute(new Float32Array(Modele.NV * 3), 3), norA = new T.BufferAttribute(new Float32Array(Modele.NV * 3), 3);
-      if (posA.setUsage) { posA.setUsage(T.DynamicDrawUsage || 35048); norA.setUsage(T.DynamicDrawUsage || 35048); }
-      const geo = new T.BufferGeometry(); geo.setAttribute("position", posA); geo.setAttribute("normal", norA);
-      const mats = [matPeau, maillot, cuissard, gant, blanc, matPeau, blanc];
-      const mesh = new T.Mesh(geo, mats); mesh.frustumCulled = false;
-      corps.modele = { geo, posA, norA, mesh, mats, genre: "" };
-      cycliste.add(mesh);
-    }
     // corps d'homme réaliste (MakeHuman) : 9 matières (peau, maillot, cuissard, gants, pieds cachés, peau des jambes, chaussettes, blanc des yeux, iris)
     if (ModeleH) {
       const posA = new T.BufferAttribute(new Float32Array(ModeleH.NV * 3), 3), norA = new T.BufferAttribute(new Float32Array(ModeleH.NV * 3), 3);
@@ -3576,7 +3561,21 @@ function definirPeloton(liste) {
     const c = creerCoureurIA(o.couleur, o.ampleur || 1, o.nom, o.fantome, perso);
     c.cle = k; scene.add(c.g); return c;
   });
-  for (const l of libres.values()) for (const c of l) scene.remove(c.g);
+  for (const l of libres.values()) for (const c of l) { scene.remove(c.g); jeterCoureur(c); }
+}
+// (v104) un coureur retiré rend sa mémoire à la carte graphique (avant : ses formes y restaient jusqu'au rechargement de la page,
+// de nouvelles à chaque course). Ce qui sert à d'autres est gardé : formes des vélos détaillés, matières du corps et casque de ton avatar.
+function jeterCoureur(c) {
+  const formes = new Set(geosVelo.filter(Boolean)), matieres = new Set();
+  for (const g of geosPieces.values()) formes.add(g);
+  const mh = corps.modeleH;
+  if (mh) { for (const m of mh.mats) matieres.add(m); for (const k in mh.matsIA) matieres.add(mh.matsIA[k]); }
+  for (const o of [corps.casqueH, corps.lunettesH]) if (o) o.traverse((x) => { if (x.geometry) formes.add(x.geometry); for (const m of [].concat(x.material || [])) matieres.add(m); });
+  c.g.traverse((o) => {
+    if (o.geometry && !o.isSprite && !formes.has(o.geometry)) o.geometry.dispose();   // l'étiquette (sprite) partage une forme commune à Three.js
+    for (const m of [].concat(o.material || [])) if (!matieres.has(m)) m.dispose();
+  });
+  if (c.etiq && c.etiq.material.map) c.etiq.material.map.dispose();
 }
   // dRef : distance affichée du cycliste ; les écarts avec l'utilisateur sont conservés tels quels
   // couleur principale des modèles de vélo des coureurs virtuels (d'après les vélos détaillés de js/velos.js)
@@ -3889,32 +3888,10 @@ function definirPeloton(liste) {
     });
   }
   function majModele(bal, hy, hz, sx, sy, sz, tc) {
-    const mo = corps.modele;
-    if (corpsReel()) { majModeleH(bal, hy, hz, sx, sy, sz, tc); return; }
-    poserVelo(null);
-    try {
-      if (mo.genre !== genre) {
-        mo.genre = genre;
-        const d = Modele.sets[genre];
-        mo.geo.setIndex(new T.BufferAttribute(d.tri, 1));
-        if (mo.geo.clearGroups) mo.geo.clearGroups();
-        let off = 0;
-        for (let r = 0; r < 7; r++) { const n = d.counts[r] * 3; if (r !== 4 && n && mo.geo.addGroup) mo.geo.addGroup(off, n, r); off += n; }   // les pieds du modèle restent cachés dans les chaussures
-      }
-      const ch = [], pit = [];
-      for (let k = 0; k < 2; k++) {
-        const sg = k ? 1 : -1, ang = angleMan + k * Math.PI;
-        ch.push([sg * 0.15, BBY + R_MAN * Math.cos(ang) + CHEV_PED, BBZ - R_MAN * Math.sin(ang) + 0.075]);   // cheville au-dessus de la pédale (semelle sur la pédale)
-        pit.push(-0.06 - 0.24 * Math.sin(ang - 0.1));
-      }
-      Modele.poser({ genre: genre, g: genre === "femme" ? 1.18 : 1.22, P2: [bal, hy + 0.06, hz], N2: [sx, sy + 0.035, sz - 0.025], pitch: pit, cheville: ch,
-        poignet: [[-0.21, 0.985, -0.43], [0.21, 0.985, -0.43]], mainDir: [0, -0.25, -1],
-        polesJambe: [[-0.16, 0.05, -1], [0.16, 0.05, -1]], polesBras: [[-0.7, -0.5, 0.15], [0.7, -0.5, 0.15]] }, mo.posA.array, mo.norA.array);
-      mo.posA.needsUpdate = true; mo.norA.needsUpdate = true;
-    } catch (e) { apparence.realiste = false; console.warn("corps réaliste désactivé", e); }
+    if (corpsReel()) majModeleH(bal, hy, hz, sx, sy, sz, tc); else poserVelo(null);
   }
 
-  // nouveau corps (homme ou femme) : même pédalage que l'ancien modèle, à taille réelle (g = 1), tête posée sur le cou
+  // corps réaliste (homme ou femme) : à taille réelle (g = 1), tête posée sur le cou
   function majModeleH(bal, hy, hz, sx, sy, sz, tc) {
     const mo = corps.modeleH;
     const g = genre === "femme" && ModeleF ? "femme" : "homme", M = g === "femme" ? ModeleF : ModeleH;
@@ -4036,7 +4013,7 @@ function definirPeloton(liste) {
       b.delto.position.set(ex, ey, ez);
       b.main.position.set(mx, my, mz - 0.02);
     }
-    if (apparence.realiste !== false && corps.modele) majModele(bal, hy, hz, sx, sy, sz, [hx, hy2, hz2]);
+    if (apparence.realiste !== false && corps.modeleH) majModele(bal, hy, hz, sx, sy, sz, [hx, hy2, hz2]);
     // jambes
     for (let k = 0; k < 2; k++) {
       const j = jambes[k], sg = k ? 1 : -1;
@@ -4066,11 +4043,10 @@ function definirPeloton(liste) {
 
   function visibiliteCorps(cacher) {
     const a = apparence, h = !cacher, c = a.casque;
-    const reel = apparence.realiste !== false && !!corps.modele;
+    const reel = apparence.realiste !== false && corpsReel();
     for (const k of ["collier", "cou", "tete"]) corps[k].visible = h;
     for (const k of ["torse", "epaules", "poitrine", "bassin"]) corps[k].visible = h && !reel;
-    const H = reel && corpsReel();
-    if (corps.modele) corps.modele.mesh.visible = reel && !H;
+    const H = reel;
     if (corps.modeleH) corps.modeleH.mesh.visible = H;
     for (const b of corps.bras) for (const k in b) b[k].visible = !reel;
     const longB = a.basStyle === "long";
@@ -4131,7 +4107,6 @@ function definirPeloton(liste) {
     const m = matMaillot.color, lum = 0.3 * m.r + 0.59 * m.g + 0.11 * m.b;
     matAccent.color.set(lum > 0.58 ? 0x2b2f3a : 0xffd8a8);
     const long = apparence.basStyle === "long";
-    if (corps.modele) { corps.modele.mats[5] = long ? matBas : matPeau; corps.modele.mats[6] = long ? matBas : matBlanc; }
     if (corps.matCasqueH) corps.matCasqueH.color.set(apparence.casqueCouleur || 0xf2f4f6);
     if (corps.casqueH && corps.styleCasque !== (apparence.casqueStyle || "classique")) corps.styleCasque = appliquerStyleCasque(corps.casqueH, apparence.casqueStyle);   // (v76) forme du casque
     matBlanc.color.set(apparence.chaussettes);                                   // (v69 suite) chaussettes de l'ancien modèle
@@ -4931,7 +4906,6 @@ function definirPeloton(liste) {
     if (!n) { if (pietons.corps.count) for (const m of [pietons.corps, pietons.tete, pietons.jg, pietons.jd]) m.count = 0; return; }
     while (pietonsListe.length < n) { const p = {}; placerPieton(p, d, true); pietonsListe.push(p); }
     pietonsListe.length = n;
-    const rep = [];
     let k = 0;
     const ord = dummy.rotation.order;
     for (const p of pietonsListe) {
@@ -5604,7 +5578,7 @@ function definirPeloton(liste) {
      u0/uw/p (écart à l'axe : u0 + hasard^p × uw), cote (1 ou -1 : un seul côté), rivage [a, b] (sur la plage : a à a + b m de la mer),
      e0/ew (taille), cols (couleurs au hasard, ou fonction qui les donne), alig (posé dans l'axe de la route), ici(d, u), dy, ombre, saisons, partout */
   function solDetails(H) {
-    const { boite, cyl, cone, boule } = P3;
+    const { boite, cyl, boule } = P3;
     const VERTS = ["campagne", "montagne", "mer", "ardennes", "toscane"], FORET = ["campagne", "montagne", "ardennes"], NH = ["printemps", "ete", "automne"], PE = ["printemps", "ete"];
     const VERT = 0x3f6b2e;
     const pasIci = (d, u) => (themeNom === "montagne" && alt3d(d) > 1950) || (!GEO && themeNom === "mer" && (ville(d) > 0.4 || (u < 0 && -u > rivage(d) - 22)))
@@ -5854,7 +5828,6 @@ function definirPeloton(liste) {
     }
     for (; i < panneauxEpingle.length; i++) panneauxEpingle[i].g.visible = false;
   }
-  function cacherDecorThemes() { for (const f of familles) f.mesh.visible = false; for (const p of panneauxEpingle) p.g.visible = false; }
 
   /* ---------- Montagnes lointaines (monde montagne) ---------- */
   let tH0 = null;   // texture d'herbe du sol (gardée : la ville de nuit retire la texture du sol)
@@ -6346,11 +6319,6 @@ function definirPeloton(liste) {
       secY = f * (0.004 * Math.sin(temps * 31) + 0.0035 * Math.sin(temps * 17 + 1)) + 0.004 * Math.sin(angleMan * 2) * (cad > 0 ? 1 : 0);
       secR = f * 0.0025 * Math.sin(temps * 23);
     }
-    if (e.vibre > 0) {            // (v69 suite) pavés et chemins : la caméra tressaute (plus vite on va, plus ça secoue)
-      const f2 = Math.min(vit / 7, 1) * e.vibre;
-      secY += f2 * (0.018 * Math.sin(temps * 53) + 0.012 * Math.sin(temps * 31 + 2.0) + 0.008 * Math.sin(temps * 89 + 1.0));
-      secR += f2 * 0.004 * Math.sin(temps * 41 + 0.5);
-    }
     const fovV = V.fov || 58;
     if (camera.fov !== fovV) { camera.fov = fovV; camera.updateProjectionMatrix(); }
     camera.position.set(_p[0] + Math.cos(hc) * (u + V.side), alt3d(dc) + rampeH(dc) + V.up + secY, _p[1] + Math.sin(hc) * (u + V.side));
@@ -6490,6 +6458,8 @@ function definirPeloton(liste) {
     vignetteVelo, vignetteRoue,
     definirEffets: (o) => { if (o && o.pietons !== undefined) pietonsNiveau = o.pietons | 0; if (o && o.poussiere !== undefined) poussOn = !!o.poussiere; if (o && o.foule !== undefined) { fouleNiveau = o.foule | 0; fouleCle = ""; } },
     definirMeteo: (m) => { if (renderer) definirMeteo(m); },
+    // (v104) mémoire de la carte graphique, pour vérifier qu'elle ne grossit pas d'une course à l'autre
+    memoire: () => (renderer ? { formes: renderer.info.memory.geometries, textures: renderer.info.memory.textures } : null),
     pluie: () => meteoVal.pluie,           // (v69) pour le son : intensité de la pluie (0 à 1) et nombre d’éclairs (le tonnerre suit chaque éclair)
     eclairs: () => nbEclairs,
     meteo: () => { const e = ETATS_METEO[meteoEtat] || ETATS_METEO.clair; return { etat: meteoEtat, nom: e.nom, ico: e.ico, auto: meteoMode === "auto" }; },

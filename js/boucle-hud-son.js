@@ -105,8 +105,10 @@ function rafraichir() {
   majRampe();
   // (v69 suite) pas de départ automatique pendant le choix du monde : on peut s'échauffer en choisissant,
   // sinon la sortie démarrait sur l'ancien parcours et empêchait de changer de monde
-  const surChoix = !$("onglet-world").hidden && !$("world-choix").hidden;
-  if (!balade.enCours && !balade.auto && (balade.temps === 0 || (rampe && rampe.etat === "attente")) && !surChoix && $("auto-depart").checked) {
+  // (v104) ni ailleurs que sur l'écran de course ou « En direct » : en continuant à tourner les jambes après « Terminer »,
+  // une nouvelle sortie démarrait toute seule pendant qu'on lisait le résumé
+  const ecranDeCourse = !$("onglet-world").hidden && !$("world-jeu").hidden, enDirect = !$("onglet-seance").hidden && !$("sq-direct").hidden;
+  if (!balade.enCours && !balade.auto && (balade.temps === 0 || (rampe && rampe.etat === "attente")) && (ecranDeCourse || enDirect) && $("auto-depart").checked) {
     const pedaleDepart = (puissance !== null && puissance >= 5) || (cadence !== null && cadence >= 10);
     if (pedaleDepart && demanderDepartRampe()) { /* contre-la-montre : compte à rebours sur la rampe */ }
     else if (pedaleDepart) {
@@ -252,25 +254,6 @@ function majHud(puissance, fc) {
   if (typeof HudSeance !== "undefined") HudSeance.maj(puissance, fc);     // (v103) résumé de la séance à droite et bloc en cours en haut
 }
 
-/* (v69) courbe de la puissance des 60 dernières secondes, sous le bloc effort (barres à la couleur de la zone) */
-function dessinerPuissanceHud() {
-  const c = $("hz-spark"), cw = c.clientWidth, ch = c.clientHeight;
-  if (!cw || !ch) return;
-  if (c.width !== cw * 2 || c.height !== ch * 2) { c.width = cw * 2; c.height = ch * 2; }
-  const W = c.width, H = c.height, x = c.getContext("2d"), f = ftp();
-  x.clearRect(0, 0, W, H);
-  const s = session.samples, n = 60, deb = Math.max(0, s.length - n), bw = W / n;
-  let mx = f * 1.5;
-  for (let i = deb; i < s.length; i++) mx = Math.max(mx, s[i].p || 0);
-  x.fillStyle = "rgba(255,255,255,.18)"; x.fillRect(0, H - H * f / mx, W, 2);           // repère du FTP
-  for (let i = deb; i < s.length; i++) {
-    const v = s[i].p || 0, h = Math.max(2, H * v / mx), k = i - (s.length - n);
-    x.fillStyle = (ZONES_P.find((z) => v / f <= z.max) || ZONES_P[ZONES_P.length - 1]).couleur;
-    x.globalAlpha = 0.45 + 0.55 * (k / n);
-    x.fillRect(k * bw + 1, H - h, Math.max(1, bw - 2), h);
-  }
-  x.globalAlpha = 1;
-}
 function dessinerCarteHud() {
   const c = $("hz-carte-c"), W = c.width, H = c.height, x = c.getContext("2d");
   x.clearRect(0, 0, W, H);
@@ -482,12 +465,14 @@ function annoncer(titre, detail, classe, duree) {
   clearTimeout(annonceMinuteur);
   if (!titre) { a.hidden = true; return; }
   a.className = "hz" + (classe ? " " + classe : "");
-  a.innerHTML = "<b>" + titre + "</b>" + (detail ? "<span>" + detail + "</span>" : "");
+  // (v104) écrit comme du texte : un message d'un fichier .erg ou un nom ne peut plus contenir de code
+  const b = document.createElement("b"); b.textContent = titre; a.textContent = ""; a.append(b);
+  if (detail) { const s = document.createElement("span"); s.textContent = detail; a.append(s); }
   a.hidden = false;
   annonceMinuteur = setTimeout(() => { a.hidden = true; }, (duree || 5) * 1000);
 }
 /* ---------- (v86) Contre-la-montre : vélo de CLM obligatoire, rampe de départ et compte à rebours ---------- */
-let rampe = null, classementFinalMontre = false, provFin = null, attenteFinale = false;
+let rampe = null, provFin = null, attenteFinale = false;
 function forcerVeloClm() {
   const sel = $("avatar-velo");
   if (materielVelo(sel.value, $("avatar-roues").value).clm) return;
@@ -543,11 +528,15 @@ function lancerPeloton() {
     forcerVeloClm();
     rampe = balade.temps > 0 && !departApresEchauffement ? { etat: "parti" } : { etat: "attente" };
     if (departApresEchauffement) { balade.enCours = false; balade.auto = false; balade.vitesse = 0; majBoutonBalade(); }
-  } else { rendreVelo(); rampe = null; }
+  } else {
+    // (v104) pendant l'échauffement d'un contre-la-montre, on garde le vélo de chrono (il était rendu dès l'entrée dans le monde)
+    if (!(typeof echauffementEnCours === "function" && echauffementEnCours())) rendreVelo();
+    rampe = null;
+  }
   departApresEchauffement = false; provFin = null; attenteFinale = false;
   if (monde3d && monde3d.definirRampe) monde3d.definirRampe(rampe && rampe.etat === "attente" ? balade.distance : null);
   { const cf = $("clm-final"); if (cf) cf.hidden = true; }
-  pelotonFinAnnonce = false; classementFinalMontre = false; pelotonSig = ""; pelotonDernierTour = false; annoncer("");
+  pelotonFinAnnonce = false; pelotonSig = ""; pelotonDernierTour = false; annoncer("");
   envoyerPeloton3D(); majHudPeloton();
 }
 function envoyerPeloton3D() {
@@ -586,7 +575,7 @@ function montrerClassementFinal(prov, fin) {
   const hex = (v) => "#" + ("000000" + (v & 0xffffff).toString(16)).slice(-6);
   c.innerHTML = '<div class="cf-t"><b>Classement final · contre-la-montre</b><button type="button" class="cf-x" aria-label="Fermer">×</button></div>' +
     '<div class="cf-sous">Classement provisoire…</div><div class="cf-l"><div class="cf-i" style="height:' + n * H + 'px">' +
-    fin.map((x, i) => '<div class="cf-r' + (x.user ? " moi" : "") + '" data-i="' + i + '" style="transform:translateY(' + (idxP.has(x.nom) ? idxP.get(x.nom) : i) * H + 'px)"><i style="background:' + hex(x.couleur) + '"></i><b class="cf-n"></b><span>' + (x.eq === 0 && !x.user ? "★ " : "") + x.nom + '</span><em></em></div>').join("") + "</div></div>";
+    fin.map((x, i) => '<div class="cf-r' + (x.user ? " moi" : "") + '" data-i="' + i + '" style="transform:translateY(' + (idxP.has(x.nom) ? idxP.get(x.nom) : i) * H + 'px)"><i style="background:' + hex(x.couleur) + '"></i><b class="cf-n"></b><span>' + (x.eq === 0 && !x.user ? "★ " : "") + echapper(x.nom) + '</span><em></em></div>').join("") + "</div></div>";
   c.hidden = false;
   c.querySelector(".cf-x").onclick = () => { c.hidden = true; };
   const lst = c.querySelector(".cf-l"), rows = [...c.querySelectorAll(".cf-r")], rowMoi = rows[moiF];
@@ -797,7 +786,7 @@ function construireResume() {
 }
 function afficherResume(res) {
   const r = res.r, t = (b, l) => '<div class="rf-t"><b>' + b + "</b><span>" + l + "</span></div>";
-  let h = "<h2>Sortie terminée</h2><div class=\"rf-sous\">" + res.monde + (res.pr ? " · nouveau record du circuit !" : "") + (res.rang ? " · " + (res.rang[2] === false ? "course non terminée (" : "") + res.rang[0] + (res.rang[0] === 1 ? "er" : "e") + " sur " + res.rang[1] + (res.rang[2] === false ? " à l’arrêt)" : "") : "") + "</div><div class=\"rf-grille\">";
+  let h = "<h2>Sortie terminée</h2><div class=\"rf-sous\">" + echapper(res.monde) + (res.pr ? " · nouveau record du circuit !" : "") + (res.rang ? " · " + (res.rang[2] === false ? "course non terminée (" : "") + res.rang[0] + (res.rang[0] === 1 ? "er" : "e") + " sur " + res.rang[1] + (res.rang[2] === false ? " à l’arrêt)" : "") : "") + "</div><div class=\"rf-grille\">";
   h += t(formatDuree(r.n), "Durée") + t(fr2(r.distance / 1000) + " km", "Distance") + t(fr1(r.vitMoy) + " km/h", "Vitesse moyenne") + t(Math.round(r.dplus) + " m", "Dénivelé positif");
   h += t(Math.round(r.pMoy) + " W", "Puissance moyenne") + t(Math.round(r.np) + " W", "Puissance normalisée") + t(Math.round(r.tss), "Charge (TSS)") + t(Math.round(r.kcal) + " kcal", "Énergie");
   if (r.fcMoy !== null) h += t(Math.round(r.fcMoy) + " bpm", "FC moyenne");
@@ -853,14 +842,12 @@ function boucle3D() {
   const rp = typeof Revoir !== "undefined" && Revoir.actif ? Revoir.image(dt) : null;      // (v69 suite) on revoit une sortie enregistrée
   try {
     const maintenant10 = t - hudDernier > 100;
-    if (maintenant10) { hudDernier = t; if (!rp) { majHudPeloton(); majTours(); } dessinerCarteHud(); dessinerProfilHud(); dessinerPuissanceHud(); Son.maj(rp ? rp.v : balade.enCours ? balade.vitesse : 0, rp ? rp.ratio : balade.ratio || 0, true); }
-    const rv = rp ? null : revetementA(balade.distance);
+    if (maintenant10) { hudDernier = t; if (!rp) { majHudPeloton(); majTours(); } dessinerCarteHud(); dessinerProfilHud(); Son.maj(rp ? rp.v : balade.enCours ? balade.vitesse : 0, rp ? rp.ratio : balade.ratio || 0, true); }
     monde3d.dessiner({
       canvas: $("monde3d"), dt: dt, distance: rp ? rp.d : balade.distance + extrapole,
       vitesse: rp ? rp.v : balade.enCours ? balade.vitesse : 0, cadence: rp ? rp.c : balade.enCours ? balade.cadence : 0,
       ratio: rp ? rp.ratio : balade.enCours ? (balade.ratio || 0) : 0,
-      peloton: rp ? rp.peloton : donnees3D(t),
-      vibre: 0   // (v82) plus de secousses de la caméra sur les pavés
+      peloton: rp ? rp.peloton : donnees3D(t)
     });
     Perf.image(dt * 1000);                                // (v99) régulateur de performance
     if (typeof Photos !== "undefined") Photos.apresDessin($("monde3d"));   // (v72) photo demandée : copiée juste après le dessin

@@ -322,6 +322,7 @@ $("btn-erg-rapide").addEventListener("click", () => {
 
 /* ----- Bibliothèque et séances importées ----- */
 const CLE_SEANCES = "velo-virtuel-seances";
+const MAX_SEANCES = 100;      // (v104) même limite pour les séances importées et créées
 let seancesImportees = [];
 function lireImportees() { try { seancesImportees = JSON.parse(localStorage.getItem(CLE_SEANCES) || "[]"); } catch (e) { seancesImportees = []; } if (!Array.isArray(seancesImportees)) seancesImportees = []; }
 function sauverImportees() { try { localStorage.setItem(CLE_SEANCES, JSON.stringify(seancesImportees)); } catch (e) { /* ignoré */ } }
@@ -401,7 +402,7 @@ function sqOnglet(nom) {                             // onglets de la page Séan
   for (const n of ["biblio", "creer", "direct", "prog"]) $("sq-" + n).hidden = n !== nom;
   if (nom === "prog" && typeof Programmes !== "undefined") Programmes.rendre();
   document.querySelectorAll("#sq-onglets button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.sq === nom)));
-  setTimeout(() => { if (nom === "biblio") redessinerBiblio(); window.dispatchEvent(new Event("resize")); }, 0);
+  setTimeout(() => { if (nom === "biblio") redessinerBiblio(); if (nom === "direct") majStats(); window.dispatchEvent(new Event("resize")); }, 0);
 }
 document.querySelectorAll("#sq-onglets button").forEach((b) => b.addEventListener("click", () => sqOnglet(b.dataset.sq)));
 window.addEventListener("resize", () => { if (!$("onglet-seance").hidden && !$("sq-biblio").hidden) redessinerBiblio(); });
@@ -483,7 +484,7 @@ async function importerSeance(f, charger) {
     const ints = blocsVersIntervalles(r.blocs.map(([min, pct, fin, , , cad]) => [min, borner(pct, 10, 400), fin === undefined ? undefined : borner(fin, 10, 400), undefined, undefined, cad >= 30 && cad <= 200 ? cad : 0]));
     seancesImportees = seancesImportees.filter((s) => s.nom !== r.nom);        // même nom : la nouvelle version remplace l'ancienne
     seancesImportees.unshift({ nom: r.nom, ints: ints, textes: r.textes || [] });
-    seancesImportees = seancesImportees.slice(0, 30);
+    seancesImportees = seancesImportees.slice(0, MAX_SEANCES);
     sauverImportees(); rendreBiblio();
     if (!charger) return;
     chargerSeance(ints, false, r.nom, r.textes || []);
@@ -730,12 +731,23 @@ document.addEventListener("click", (e) => {
   b.textContent = "FTP mis à jour ✓"; b.disabled = true;
 });
 
+// (v104) le dénivelé affiché pendant la sortie est tenu à jour au fil de l'eau ; les tableaux et graphiques de « En direct » ne sont
+// recalculés que lorsqu'on les regarde (avant : toute la sortie était recalculée chaque seconde, même onglet caché)
+const cumulDplus = { s: null, n: 0, v: 0 };
+function majDplus() {
+  const s = session.samples;
+  if (cumulDplus.s !== s || s.length < cumulDplus.n) { cumulDplus.s = s; cumulDplus.n = 0; cumulDplus.v = 0; }
+  for (let i = Math.max(1, cumulDplus.n); i < s.length; i++) { const d = s[i].alt - s[i - 1].alt; if (d > 0) cumulDplus.v += d; }
+  cumulDplus.n = s.length;
+  dernierDeniv = cumulDplus.v;
+}
 function majStats() {
+  majDplus();
+  if ($("onglet-seance").hidden || $("sq-direct").hidden) return;
   const r = resumer(session.samples, ftp(), fcmax());
   rendreTuiles($("tuiles-live"), r);
   $("m-duree").textContent = formatDuree(r.n);
   $("m-denivele").textContent = Math.round(r.dplus);
-  dernierDeniv = r.dplus;
   $("m-vitmoy").textContent = r.n ? fr1(r.vitMoy) : "–";
   $("m-fcmoy").textContent = r.fcMoy !== null ? Math.round(r.fcMoy) : "–";
   $("m-cadmoy").textContent = r.cadMoy !== null ? Math.round(r.cadMoy) : "–";

@@ -38,7 +38,7 @@ const Rapport = (function () {
       lignes += '<div class="rp-l' + (tenu ? " ok" : " ko") + '"><span>' + (tenu ? "✓" : "✗") + " " + (i + 1) + ". " + formatMinutes(iv.min) + " à " + (iv.fin !== undefined ? iv.pct + "→" + iv.fin : iv.pct) + " % (" + Math.round(cible) + " W)</span><b>" + Math.round(moy) + " W · " + Math.round(dans * 100) + " % dans la cible</b></div>";
     });
     if (!nb) return "";
-    return '<div class="rp-bloc"><div class="rp-t">Intervalles de « ' + (seance.nom || "la séance") + " » : " + ok + " sur " + nb + " tenus</div>" + lignes + "</div>";
+    return '<div class="rp-bloc"><div class="rp-t">Intervalles de « ' + echapper(seance.nom || "la séance") + " » : " + ok + " sur " + nb + " tenus</div>" + lignes + "</div>";
   }
 
   function comparaison(r) {

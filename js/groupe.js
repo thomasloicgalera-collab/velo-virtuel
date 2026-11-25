@@ -12,7 +12,7 @@ const Groupe = (function () {
   const conns = new Map();                           // créateur : id de l'ami → connexion
   const amis = new Map();                            // id → dernier état reçu (+ t = heure de réception)
   let sig3D = "", mondeEnvoye = "", messageEtat = "", jeuAvant = false, meteoSuivie = false;
-  let finGroupe = 0, monFin = null, recEnvoi = 0, recSig = "";   // (v97) arrivée commune : distance d'arrivée imposée par le créateur, mon temps d'arrivée ; envoi de mes temps de la semaine
+  let finGroupe = 0, monFin = null, recEnvoi = 0;   // (v97) arrivée commune : distance d'arrivée imposée par le créateur, mon temps d'arrivée ; envoi de mes temps de la semaine
 
   const nom = () => ($("groupe-nom").value.trim() || "Cycliste").slice(0, 18);
   function tirerCode() { let s = ""; for (let i = 0; i < 5; i++) s += CAR[Math.floor(Math.random() * CAR.length)]; return s; }
@@ -90,22 +90,51 @@ const Groupe = (function () {
     if (hote) { for (const c of conns.values()) if (c.open) c.send(m); }
     else if (versHote && versHote.open) versHote.send(m);
   }
+  // (v104) rien de ce qui vient d'un autre ordinateur n'est utilisé tel quel : nombres bornés, textes raccourcis, choix limités à ceux de l'application
+  const AMIS_MAX = 20, METEOS = ["clair", "nuageux", "brume", "pluie", "orage"];
+  const nb = (x, a, b, def) => (typeof x === "number" && isFinite(x) ? Math.max(a, Math.min(b, x)) : def);
+  const txt = (x, n) => (typeof x === "string" ? x.slice(0, n) : "");
+  const choix = (id, v, def) => ([...$(id).options].some((o) => o.value === v) ? v : def);
+  const connu = (table, v, def) => (typeof v === "string" && Object.prototype.hasOwnProperty.call(table, v) ? v : def);
+  const coul = (x, def) => Math.round(nb(x, 0, 0xffffff, def));
+  function lireEtat(m, id) {
+    const p = m.perso && typeof m.perso === "object" ? m.perso : {};
+    return { k: "etat", id, nom: txt(m.nom, 18) || "Ami", monde: txt(m.monde, 80), jeu: !!m.jeu,
+      d: nb(m.d, -1000, 1e7, 0), v: nb(m.v, 0, 40, 0), cad: nb(m.cad, 0, 250, 0), w: Math.round(nb(m.w, 0, 3000, 0)), kg: nb(m.kg, 30, 200, 75), ratio: nb(m.ratio, 0, 10, 0.7),
+      fin: typeof m.fin === "number" ? nb(m.fin, 0, 1e6, null) : null,
+      vent: Array.isArray(m.vent) && m.vent.length === 2 ? [nb(m.vent[0], -1000, 1000, 0), nb(m.vent[1], 0, 40, 0)] : null,
+      meteo: METEOS.includes(m.meteo) ? m.meteo : null,
+      couleur: coul(m.couleur, 0x888888), velo: connu(PERF_VELOS, m.velo, "madone"), roues: connu(PERF_ROUES, m.roues, "35"), clm: !!m.clm,
+      perso: { genre: p.genre === "femme" ? "femme" : "homme", peau: coul(p.peau, 0xe0ac82), cheveux: coul(p.cheveux, 0x3b2a1e),
+        coupe: choix("avatar-coiffure", p.coupe, "court"), barbe: choix("avatar-barbe", p.barbe, $("avatar-barbe").options[0].value),
+        casque: typeof p.casque === "number" ? coul(p.casque, 0xf2f4f6) : null, casqueStyle: choix("avatar-casque-style", p.casqueStyle, "classique"),
+        lunettes: !!p.lunettes, verres: choix("avatar-verres", p.verres, $("avatar-verres").options[0].value) } };
+  }
+  const faireSuivre = (m, sauf) => { for (const [id, c] of conns) if (id !== sauf && c.open) c.send(m); };
   function recevoir(m, de) {
     if (!m || typeof m !== "object") return;
+    // le créateur sait qui parle (la liaison) : un ami ne peut pas se faire passer pour un autre. Un ami, lui, reçoit tout du créateur.
+    const id = hote ? de : txt(m.id, 100);
     if (m.k === "etat") {
-      if (m.id === monId) return;
-      amis.set(m.id, Object.assign(m, { t: performance.now() }));
-      if (!hote && m.vent) { Aero.v.dir = m.vent[0]; Aero.v.vit = m.vent[1]; }
-      if (!hote && m.meteo && monde3d && monde3d.meteo && monde3d.meteo().etat !== m.meteo) { monde3d.definirMeteo(m.meteo); meteoSuivie = true; }
-      if (hote) for (const [id, c] of conns) if (id !== de && c.open) c.send(m);    // le créateur fait suivre aux autres
+      if (!id || id === monId || (!amis.has(id) && amis.size >= AMIS_MAX)) return;
+      const e = lireEtat(m, id);
+      amis.set(id, Object.assign({}, e, { t: performance.now() }));
+      if (!hote && e.vent) { Aero.v.dir = e.vent[0]; Aero.v.vit = e.vent[1]; }
+      if (!hote && e.meteo && monde3d && monde3d.meteo && monde3d.meteo().etat !== e.meteo) { monde3d.definirMeteo(e.meteo); meteoSuivie = true; }
+      if (hote) faireSuivre(e, de);                                    // le créateur fait suivre aux autres
       rafraichir3D();
-    } else if (m.k === "parti" && hote) {
-      for (const [id, c] of conns) if (id !== de && c.open) c.send(m);
-      oublier(m.id);
-    } else if (m.k === "parti") oublier(m.id);
-    else if (m.k === "monde" && !hote) suivreMonde(m);
-    else if (m.k === "rec") { if (m.id !== monId && typeof Defis !== "undefined") Defis.recu(m.nom || "Ami", m.recs); if (hote) for (const [id, c] of conns) if (id !== de && c.open) c.send(m); }   // (v97) temps de la semaine d'un ami
-    else if (m.k === "depart" && !hote) { finGroupe = m.fin || 0; monFin = null; suivreMonde(m); partir(m); }
+    } else if (m.k === "parti") {
+      if (hote) faireSuivre({ k: "parti", id }, de);
+      oublier(id);
+    } else if (m.k === "monde" && !hote) suivreMonde({ monde: txt(m.monde, 80), nomMonde: txt(m.nomMonde, 80) });
+    else if (m.k === "rec") {                                          // (v97) temps de la semaine d'un ami
+      const nomAmi = txt(m.nom, 18) || "Ami", recs = Array.isArray(m.recs) ? m.recs.slice(0, 60) : [];
+      if (id !== monId && typeof Defis !== "undefined") Defis.recu(nomAmi, recs);
+      if (hote) faireSuivre({ k: "rec", id, nom: nomAmi, recs }, de);
+    } else if (m.k === "depart" && !hote) {
+      const dep = { monde: txt(m.monde, 80), nomMonde: txt(m.nomMonde, 80), fin: nb(m.fin, 0, 1e7, 0), d0: nb(m.d0, 0, 1e7, 0) };
+      finGroupe = dep.fin; monFin = null; suivreMonde(dep); partir(dep);
+    }
   }
   const finPourGroupe = () => (Peloton.actif() && Peloton.mode() === "course" && isFinite(Peloton.longueurCourse()) ? Math.round(Peloton.longueurCourse()) : 0);   // (v97) arrivée commune seulement si le créateur roule une course avec arrivée
   const msgDepart = () => ({ k: "depart", fin: hote ? finPourGroupe() : 0, monde: mondeActifId, nomMonde: (MONDES.find((x) => x.id === mondeActifId) || {}).nom || "", d0: parseFloat($("depart-km").value) || 0 });
@@ -146,7 +175,7 @@ const Groupe = (function () {
     jeuAvant = jeu;
     envoyer(monEtat());
     // (v97) mes meilleurs temps de la semaine sur les segments, toutes les 10 s (ou dès qu'ils changent)
-    if (typeof Defis !== "undefined" && t - recEnvoi > 10000) { recEnvoi = t; const r = Defis.mesRecs(), sg = JSON.stringify(r); if (r.length) { envoyer({ k: "rec", id: monId, nom: nom(), recs: r }); recSig = sg; } }
+    if (typeof Defis !== "undefined" && t - recEnvoi > 10000) { recEnvoi = t; const r = Defis.mesRecs(); if (r.length) envoyer({ k: "rec", id: monId, nom: nom(), recs: r }); }
     rendre();
   }, PERIODE);
   window.addEventListener("beforeunload", () => { if (connecte()) envoyer({ k: "parti", id: monId }); });
@@ -218,7 +247,6 @@ const Groupe = (function () {
     }
     if (bloc.dataset.sig !== html) { bloc.dataset.sig = html; $("hz-groupe-c").innerHTML = html; }
   }
-  const echapper = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
   // ---- boutons ----
   try { $("groupe-nom").value = localStorage.getItem(CLE_NOM) || ""; } catch (e) { /* ignoré */ }

@@ -65,7 +65,7 @@ const Nolio = (function () {
   function htmlResume() {
     if (!dernier || !jeton()) return "";
     const deja = envoyes().includes(dernier.id);
-    return '<div class="rf-nolio"><b>Nolio</b><span id="nolio-statut">' + (statut || (deja ? "Séance déjà envoyée ✓" : "")) + "</span>" + (deja || statut.includes("en cours") ? "" : '<button type="button" id="nolio-envoyer">Envoyer à Nolio</button>') + "</div>";
+    return '<div class="rf-nolio"><b>Nolio</b><span id="nolio-statut">' + echapper(statut || (deja ? "Séance déjà envoyée ✓" : "")) + "</span>" + (deja || statut.includes("en cours") ? "" : '<button type="button" id="nolio-envoyer">Envoyer à Nolio</button>') + "</div>";
   }
   function brancher(c) {
     const b = c.querySelector("#nolio-envoyer");

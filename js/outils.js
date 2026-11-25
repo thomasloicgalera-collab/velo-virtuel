@@ -8,7 +8,7 @@ const UUID = {
   POWER: 0x1818, POWER_MEAS: 0x2A63,
   HR: 0x180D, HR_MEAS: 0x2A37
 };
-const VERSION_APPLI = 103;      // (v102) affichée dans les Réglages et écrite dans les .FIT ; à changer à chaque version, avec VERSION dans sw.js
+const VERSION_APPLI = 104;      // (v102) affichée dans les Réglages et écrite dans les .FIT ; à changer à chaque version, avec VERSION dans sw.js
 const $ = (id) => document.getElementById(id);
 const maintenant = () => performance.now();
 const frais = (ts) => ts && maintenant() - ts < 5000;
@@ -18,6 +18,8 @@ const fr2 = (n) => n.toFixed(2).replace(".", ",");
 const ftp = () => Math.max(50, parseInt($("ftp").value, 10) || 200);
 const fcmax = () => Math.max(120, parseInt($("fcmax").value, 10) || 190);
 const deuxChiffres = (n) => String(n).padStart(2, "0");
+// (v104) tout texte venu de l'extérieur (nom de parcours, de séance, d'ami, de segment…) passe par ici avant d'être mis dans du HTML
+const echapper = (s) => String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 function formatDuree(sec) {
   sec = Math.max(0, Math.round(sec));
@@ -291,7 +293,13 @@ async function reessayer(type, device, essai) {
 
 async function connecterAppareil(type) {
   const a = appareils[type], p = PILOTES[type];
-  const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [p.service] }] });
+  let device;
+  try { device = await navigator.bluetooth.requestDevice({ filters: [{ services: [p.service] }] }); }
+  catch (err) {
+    log(err.name === "NotFoundError" ? "Aucun appareil choisi." : "Erreur de connexion : " + err.message);
+    if (!(a.device && a.device.gatt.connected)) afficherEtat(type, "Non connecté", false);
+    return;
+  }
   if (a.device && a.device !== device && a.device.gatt.connected) { a.manuel = true; a.device.gatt.disconnect(); }
   arreterReconnexion(a);
   a.device = device; a.manuel = false;
@@ -317,9 +325,11 @@ for (const type of Object.keys(PILOTES)) {
     }
     try { await connecterAppareil(type); }
     catch (err) {
-      if (a.device && a.device.gatt.connected) return;
+      // (v104) liaison ouverte mais incomplète (service introuvable…) : on la referme et on le dit (avant, l'écran restait sur « Connexion en cours… »)
+      arreterReconnexion(a); a.manuel = true;
+      if (a.device && a.device.gatt.connected) a.device.gatt.disconnect();
       afficherEtat(type, "Non connecté", false);
-      log(err.name === "NotFoundError" ? "Aucun appareil choisi." : "Erreur de connexion : " + err.message);
+      log("Erreur de connexion : " + err.message);
     }
   });
 }

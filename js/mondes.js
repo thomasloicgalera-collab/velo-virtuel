@@ -1059,17 +1059,6 @@ async function chargerHD(m, rapport, sauver) {
   }
   if (derniere && hd.manques.length === aFaire.length && aFaire.length) throw derniere;
 }
-function altitudeRoute(r, distance) {
-  let reste = r.boucle ? distance % r.longueur : Math.min(distance, r.longueur), alt = r.alt0;
-  for (const [l, p] of r.segments) { const part = Math.min(reste, l); alt += part * p / 100; reste -= part; if (reste <= 0) break; }
-  return alt;
-}
-function penteRoute(r, distance) {
-  let d = r.boucle ? distance % r.longueur : Math.min(distance, r.longueur - 0.01);
-  for (const [l, p] of r.segments) { if (d < l) return p; d -= l; }
-  return 0;
-}
-
 /* ---------- Sauvegarde des mondes numérisés ---------- */
 function sauverMonde(m) {
   if (!base || !m.gpx) return Promise.resolve();

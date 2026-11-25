@@ -209,6 +209,7 @@ function majModes() {
   const v = $("peloton-mode").value;
   document.querySelectorAll(".modes .mode").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === v)));
   $("options-ia").hidden = v === "aucun" || v === "fantome";
+  if (v !== "clm" && !session.samples.length && typeof rendreVelo === "function") rendreVelo();   // (v104) ton vélo revient dès que tu quittes le contre-la-montre
   if (typeof Formats !== "undefined") { Formats.majInfo(); $("info-format").hidden = v !== "course"; }   // (v94) format de course
   { const m = MONDES.find((x) => x.id === mondeChoisiId), tc = m && m.route ? toursConseilles(m.route) : null, st = $("peloton-tours");   // (v89) petit circuit : 1 tour en CLM, nombre conseillé sinon
     if (tc && !m.toursDefaut) { if (v === "clm" && st.value === String(tc)) st.value = "1"; else if (v !== "clm" && st.value === "1") st.value = String(tc); } }
@@ -222,10 +223,12 @@ function majModes() {
   majResumeChoix();
 }
 document.querySelectorAll(".modes .mode").forEach((b) => b.addEventListener("click", () => {
+  modeAvantAuto = null;                                     // choix fait à la main : on le garde
   const s = $("peloton-mode");
   if (s.value !== b.dataset.mode) { s.value = b.dataset.mode; s.dispatchEvent(new Event("change")); }
   majModes();
 }));
+let modeAvantAuto = null;   // (v104) type de sortie remplacé tout seul par un monde de contre-la-montre
 function choisirMonde(id) {
   if (!MONDES.some((m) => m.id === id)) id = MONDES[0].id;
   // nombre de tours conseillé par le monde (critérium : 10) ; en le quittant, on revient à 3 tours
@@ -237,7 +240,14 @@ function choisirMonde(id) {
   else if (avant && avant.toursDefaut && sel.value === String(avant.toursDefaut)) sel.value = "3";
   else if (tcAvant && sel.value === String(tcAvant)) sel.value = "3";
   // (v85) monde de contre-la-montre : le mode « Contre-la-montre » est choisi tout seul quand on change de monde (sauf dans un Tour)
-  if (m0 && m0.modeDefaut && mondeChoisiId !== null && mondeChoisiId !== id && $("peloton-mode").value !== "tour" && $("peloton-mode").value !== m0.modeDefaut) { $("peloton-mode").value = m0.modeDefaut; $("peloton-mode").dispatchEvent(new Event("change")); majModes(); }
+  // (v104) le mode d'avant revient quand on quitte ces mondes (avant, le contre-la-montre restait choisi sur tous les mondes suivants)
+  if (mondeChoisiId !== null && mondeChoisiId !== id && $("peloton-mode").value !== "tour") {
+    const mode = $("peloton-mode").value, auto = m0 && m0.modeDefaut;
+    let voulu = null;
+    if (auto && mode !== auto) { modeAvantAuto = mode; voulu = auto; }
+    else if (!auto && modeAvantAuto !== null) { if (mode === "clm") voulu = modeAvantAuto; modeAvantAuto = null; }
+    if (voulu !== null) { $("peloton-mode").value = voulu; $("peloton-mode").dispatchEvent(new Event("change")); majModes(); }
+  }
   mondeChoisiId = id;
   try { localStorage.setItem(CLE_MONDE_CHOISI, id); } catch (e) { /* ignoré */ }
   document.querySelectorAll("#tuiles-mondes .tuile-monde").forEach((t) => t.classList.toggle("choisi", t.dataset.id === id));
@@ -245,7 +255,6 @@ function choisirMonde(id) {
   Fond.montrer(MONDES.find((m) => m.id === id).theme);
 }
 // (v69 suite) point de départ : début du parcours, pied d'une montée (segments chronométrés) ou tous les 5 km (10 km au-delà de 60 km)
-let departsSig = "";
 function majDeparts() { $("depart-km").value = "0"; }   // (v90) le départ est toujours au début du parcours (plus de choix)
 $("depart-km").addEventListener("change", () => majResumeChoix());
 $("echauffement").addEventListener("change", () => { sauverReglages(); majResumeChoix(); });
