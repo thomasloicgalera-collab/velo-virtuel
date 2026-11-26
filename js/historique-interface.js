@@ -116,6 +116,8 @@ async function majHistorique() {
   historique.sort((a, b) => b.id - a.id);
   rendreHistorique();
   if (typeof Analyse !== "undefined") Analyse.rendre();    // (v69 suite) courbe de puissance, zones de FC, bilans
+  if (typeof MesRecords !== "undefined") MesRecords.rendre();   // (v105)
+  majSauvegarde();                                          // (v105) rappel de sauvegarde
 }
 
 /* ---------- Cumul de toutes les séances ---------- */
@@ -259,6 +261,7 @@ function reinitialiserSeance() {
   annulerEchauffement();                                         // (v74) un échauffement abandonné ne traîne pas jusqu'à la sortie suivante
   if (typeof remettreRavito === "function") remettreRavito();
   if (typeof Tour !== "undefined") Tour.quitterEtape();          // (v69 suite) une étape de Tour non terminée devra être recourue
+  if (typeof CourseSemaine !== "undefined") CourseSemaine.quitter();   // (v105)
   if (typeof Progression !== "undefined") { Progression.oublierSortie(); Progression.majAccueil(); }
   majBoutonBalade(); majStats(); lancerPeloton();
 }
@@ -382,12 +385,42 @@ document.addEventListener("keydown", (e) => {
 const CLES_PRIVEES = ["velo_nolio_jeton", "velo_nolio_auto"];
 const cleSauvegardable = (k) => /^velo/.test(k) && !CLES_PRIVEES.includes(k);
 const lireTout = (nom) => transaction([nom], "readonly", (t, set) => { const q = t.objectStore(nom).getAll(); q.onsuccess = () => set(q.result); });
-$("btn-sauvegarder").addEventListener("click", async () => {
+/* (v105) rappel de sauvegarde : après un nombre de sorties choisi sans sauvegarde (10 par défaut, 0 = jamais) */
+const CLE_SAUV = "velo_sauvegarde_v1";
+function lireSauv() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(CLE_SAUV)); } catch (e) { /* ignoré */ }
+  s = Object.assign({ derniere: 0, tousLes: 10, reporte: 0 }, s && typeof s === "object" ? s : {});
+  return { derniere: +s.derniere || 0, tousLes: Math.max(0, parseInt(s.tousLes, 10) || 0), reporte: Math.max(0, parseInt(s.reporte, 10) || 0) };
+}
+function ecrireSauv(s) { try { localStorage.setItem(CLE_SAUV, JSON.stringify(s)); } catch (e) { /* stockage indisponible */ } }
+const sortiesNonSauvees = (s) => (Array.isArray(historique) ? historique.filter((h) => h.id > s.derniere).length : 0);
+function texteRappel() {
+  const s = lireSauv(), n = sortiesNonSauvees(s);
+  if (!(s.tousLes > 0 && n >= Math.max(s.tousLes, s.reporte))) return "";
+  return n + " sorties depuis " + (s.derniere ? "ta dernière sauvegarde (" + new Date(s.derniere).toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) + ")" : "le début, sans aucune sauvegarde") + " : elles ne sont gardées que dans ce navigateur.";
+}
+function htmlRappelSauvegarde() {
+  const t = texteRappel();
+  return t ? '<div class="rappel-sauve"><span>' + echapper(t) + '</span><button type="button" class="plein petit" data-sauve="oui">Sauvegarder maintenant</button><button type="button" class="petit" data-sauve="plus-tard">Plus tard</button></div>' : "";
+}
+function majSauvegarde() {
+  const s = lireSauv(), n = sortiesNonSauvees(s), t = texteRappel();
+  const accueil = $("rappel-sauvegarde");
+  if (accueil) { accueil.hidden = !t; accueil.querySelector("span").textContent = t; }
+  const info = $("sauve-info");
+  if (info) info.textContent = (s.derniere ? "Dernière sauvegarde le " + new Date(s.derniere).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "Aucune sauvegarde faite depuis la version 105") + " · " + n + (n > 1 ? " sorties enregistrées" : " sortie enregistrée") + " depuis.";
+  if ($("sauve-rappel")) $("sauve-rappel").value = String(s.tousLes);
+}
+// renvoie true quand le fichier a été créé
+async function sauvegarder() {
   const msg = $("msg-sauvegarde");
   msg.textContent = "Préparation de la sauvegarde…";
   try {
     const local = {};
     for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (cleSauvegardable(k)) local[k] = localStorage.getItem(k); }
+    const notee = Object.assign(lireSauv(), { derniere: Date.now(), reporte: 0 });   // (v105) la sauvegarde se note elle-même
+    local[CLE_SAUV] = JSON.stringify(notee);
     const s = { format: "velo-virtuel-sauvegarde", version: 1, date: Date.now(), local, resumes: [], donnees: [], mondes: [] };
     if (base) {
       s.resumes = (await lireTout("resumes")) || [];
@@ -400,8 +433,33 @@ $("btn-sauvegarder").addEventListener("click", async () => {
     const nbS = s.resumes.length || lireIndexLocal().length;
     msg.textContent = "Sauvegarde « " + nom + " » téléchargée (" + nbS + " séance" + (nbS > 1 ? "s" : "") + ", " + s.mondes.length + " monde" + (s.mondes.length > 1 ? "s" : "") + ", " + fr1(texte.length / 1048576) + " Mo).";
     log("Sauvegarde des données téléchargée : " + nom + ".");
+    ecrireSauv(notee); majSauvegarde();
+    return true;
   } catch (e) {
     msg.textContent = "Sauvegarde impossible : " + e.message + ".";
+    return false;
+  }
+}
+$("btn-sauvegarder").addEventListener("click", sauvegarder);
+if ($("sauve-rappel")) $("sauve-rappel").addEventListener("change", () => { ecrireSauv(Object.assign(lireSauv(), { tousLes: parseInt($("sauve-rappel").value, 10) || 0, reporte: 0 })); majSauvegarde(); });
+// boutons du rappel (accueil et résumé de fin)
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest && e.target.closest("[data-sauve]");
+  if (!b) return;
+  if (b.dataset.sauve === "oui") {
+    b.disabled = true;
+    const ok = await sauvegarder(), boite = b.closest(".rappel-sauve");
+    b.disabled = false;
+    if (boite && boite.id !== "rappel-sauvegarde") {                  // dans le résumé de fin : la réponse reste à la place du rappel
+      boite.querySelector("span").textContent = ok ? "Sauvegarde téléchargée ✓ : garde ce fichier à l’abri." : $("msg-sauvegarde").textContent;
+      if (ok) boite.querySelectorAll("button").forEach((x) => x.remove());
+    }
+  } else {
+    const s = lireSauv();
+    ecrireSauv(Object.assign(s, { reporte: sortiesNonSauvees(s) + 3 }));   // on en reparle dans 3 sorties
+    const boite = b.closest(".rappel-sauve");
+    if (boite && boite.id !== "rappel-sauvegarde") boite.remove();
+    majSauvegarde();
   }
 });
 $("fichier-sauvegarde").addEventListener("change", async (e) => {

@@ -1,6 +1,6 @@
 "use strict";
 /* ---------- (v71) Sortie de groupe : rouler en direct avec des amis ----------
-   Les ordinateurs se parlent directement (WebRTC, bibliothèque PeerJS chargée par CDN ; le serveur gratuit de PeerJS ne sert qu'à se trouver).
+   Les ordinateurs se parlent directement (WebRTC, bibliothèque PeerJS dans lib/ ; le serveur gratuit de PeerJS ne sert qu'à se trouver).
    Celui qui crée le groupe reçoit un code ; ses amis le tapent pour le rejoindre. Le créateur est le « centre » : il reçoit la position
    de chacun et la renvoie aux autres. Il choisit le monde pour tout le monde, et son « C'est parti » fait partir tout le groupe.
    Chacun envoie 4 fois par seconde : distance sur la route (`balade.distance`), vitesse, cadence, puissance, apparence. */
@@ -26,12 +26,12 @@ const Groupe = (function () {
       vent: hote ? [Aero.v.dir, Aero.v.vit] : null,
       meteo: hote && monde3d && monde3d.meteo ? monde3d.meteo().etat : null,   // météo du créateur : la pluie freine (roulement), elle doit être la même pour tous        // le vent du créateur s'impose à tout le groupe (sinon chacun tire le sien : courses inégales)
       couleur: parseInt($("avatar-maillot").value, 10), velo: id, roues: a.roues || "35", clm: !!(Aero.reg && Aero.reg.clm),
-      perso: { genre: $("sexe").value, peau: a.peau, cheveux: a.cheveux, coupe: a.coiffure, barbe: a.barbe, casque: a.casque ? a.casqueCouleur : null, casqueStyle: a.casqueStyle, lunettes: !!a.lunettes, verres: a.verres } };
+      perso: { genre: $("sexe").value, peau: a.peau, cheveux: a.cheveux, coupe: a.coiffure, barbe: a.barbe, casque: a.casque ? a.casqueCouleur : null, casqueStyle: a.casqueStyle, lunettes: !!a.lunettes, verres: a.verres, motif: a.motif, maillot2: a.maillot2, maillot3: a.maillot3, bas: a.bas } };
   }
 
   // ---- connexion ----
   function chargerPeer() {
-    if (typeof Peer === "undefined") { etat("Le module de connexion n’a pas pu être chargé : vérifie ta connexion Internet, puis recharge la page."); return false; }
+    if (typeof Peer === "undefined") { etat("Le module de connexion n’a pas pu être chargé : recharge la page."); return false; }
     return true;
   }
   function creer() {
@@ -108,7 +108,9 @@ const Groupe = (function () {
       perso: { genre: p.genre === "femme" ? "femme" : "homme", peau: coul(p.peau, 0xe0ac82), cheveux: coul(p.cheveux, 0x3b2a1e),
         coupe: choix("avatar-coiffure", p.coupe, "court"), barbe: choix("avatar-barbe", p.barbe, $("avatar-barbe").options[0].value),
         casque: typeof p.casque === "number" ? coul(p.casque, 0xf2f4f6) : null, casqueStyle: choix("avatar-casque-style", p.casqueStyle, "classique"),
-        lunettes: !!p.lunettes, verres: choix("avatar-verres", p.verres, $("avatar-verres").options[0].value) } };
+        lunettes: !!p.lunettes, verres: choix("avatar-verres", p.verres, $("avatar-verres").options[0].value),
+        // (v105) maillot de l'ami (motif et couleurs) ; une version plus ancienne n'en envoie pas : maillot uni, cuissard foncé
+        kit: { motif: Math.round(nb(p.motif, 0, 8, 0)), c2: coul(p.maillot2, 0xffffff), c3: coul(p.maillot3, 0x2c3e50), bas: coul(p.bas, 0x1c1f26) } } };
   }
   const faireSuivre = (m, sauf) => { for (const [id, c] of conns) if (id !== sauf && c.open) c.send(m); };
   function recevoir(m, de) {
@@ -155,6 +157,7 @@ const Groupe = (function () {
   }
   function partir(m) {
     if ($("world-choix").hidden || session.samples.length || !MONDES.some((x) => x.id === m.monde)) return;
+    if (!Chargement.pret()) { Chargement.donnees3D().then(() => setTimeout(() => partir(m), 0)); return; }   // (v105) la 3D se prépare encore
     const sel = $("depart-km");
     if ([...sel.options].some((o) => o.value === String(m.d0))) { sel.value = String(m.d0); majResumeChoix(); }
     else if (m.d0 > 0) { log("Le créateur part du km " + fr1(m.d0 / 1000) + " : ce départ n’existe plus, tu pars du début du parcours."); annoncer("Départ du groupe", "Tu pars du début, le créateur non (ancienne version)", "", 5); }   // (v91)

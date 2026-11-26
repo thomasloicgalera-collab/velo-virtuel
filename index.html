@@ -11,6 +11,15 @@
 <meta name="theme-color" content="#0d131c">
 </head>
 <body>
+<div id="ecran-chargement" role="status">
+  <div class="ch-carte">
+    <svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="7" cy="16" r="5.5"/><circle cx="25" cy="16" r="5.5"/><path d="M7 16l5-9h9l4 9M12 7l4 9 5-9M10 4h4"/></svg>
+    <p class="ch-titre">Vélo virtuel</p>
+    <p class="ch-texte">Chargement de l’application…</p>
+    <div class="ch-barre" aria-hidden="true"><i></i></div>
+  </div>
+</div>
+<div id="charge-3d" role="status" hidden><span class="c3-texte">Préparation de la 3D…</span><span class="c3-barre" aria-hidden="true"><i></i></span></div>
 <header class="barre-app">
   <div class="marque">
     <svg viewBox="0 0 32 24" aria-hidden="true"><circle cx="7" cy="16" r="5.5"/><circle cx="25" cy="16" r="5.5"/><path d="M7 16l5-9h9l4 9M12 7l4 9 5-9M10 4h4"/></svg>
@@ -85,7 +94,7 @@
 
   <div id="sq-biblio">
     <div class="sq-grille">
-      <div class="carte sq-liste"><div class="sq-filtres" id="sq-filtres"></div><div id="biblio"></div></div>
+      <div class="carte sq-liste"><div class="sq-nolio"><button type="button" class="petit" id="nolio-prevues">📅 Mes séances prévues dans Nolio</button><span class="stats" id="nolio-prevues-msg" aria-live="polite"></span><ul id="nolio-prevues-liste"></ul></div><div class="sq-filtres" id="sq-filtres"></div><div id="biblio"></div></div>
       <div class="carte sq-detail" id="sq-detail"></div>
     </div>
     <details class="sq-avance">
@@ -265,12 +274,24 @@
               <div class="info" id="info-ia">D’autres coureurs t’accompagnent : grimpeurs, sprinteurs, baroudeurs et puncheurs, chacun avec son nom, son maillot et son allure, tirés au hasard à chaque sortie. Leur force part de ton FTP rapporté au poids (watts/kg), avec chacun sa réserve d’énergie et sa fatigue.</div>
             </div>
             <label id="choix-seance">Séance ERG&nbsp;: <select id="seance-monde"><option value="">Aucune (résistance d’après la pente)</option></select></label>
-            <div class="barre-seance"><button type="button" id="btn-import-accueil" class="petit">Importer une séance (.erg, .mrc, .zwo)</button><span class="stats" id="msg-import-a"></span></div>
+            <div class="barre-seance"><button type="button" id="btn-import-accueil" class="petit">Importer une séance (.erg, .mrc, .zwo)</button><button type="button" id="btn-nolio-jour" class="petit" hidden>📅 Séance du jour (Nolio)</button><span class="stats" id="msg-import-a"></span></div>
             <select id="depart-km" hidden><option value="0" selected>Au début du parcours</option></select>   <!-- (v90) plus de choix du départ : toujours au début du parcours -->
             <label class="case"><input type="checkbox" id="fantome-pr" disabled> Fantôme du record (le tour le plus rapide de ce circuit)</label>
             <label class="case"><input type="checkbox" id="fantome-seg" checked> Fantôme de mon record sur les segments chronométrés (cycliste doré)</label>
             <div class="stats" id="fantome-info"></div>
           </div>
+</details>
+<!-- (v105) course de la semaine entre amis (js/course-semaine.js) -->
+<details class="accueil-options accueil-course" id="course-semaine" open>
+  <summary><b>🏁 Course de la semaine</b><span id="cs-resume"></span></summary>
+  <div class="ao-corps">
+    <div id="cs-parcours" class="cs-parcours"></div>
+    <div class="cs-actions"><button type="button" class="plein" id="cs-courir">Courir cette course</button><button type="button" id="cs-copier" hidden>Copier mon code course</button></div>
+    <input type="text" id="cs-code-sortie" readonly hidden aria-label="Mon code course">
+    <table class="cs-table" id="cs-table" hidden></table>
+    <div class="defis-import"><input type="text" id="cs-code" placeholder="Colle ici le code course d’un ami (VC1:…)" autocomplete="off" aria-label="Code course d’un ami"><button type="button" id="cs-ajout">Ajouter</button></div>
+    <div class="info" id="cs-msg" aria-live="polite"></div>
+  </div>
 </details>
 <!-- (v97) défis de la semaine entre amis (js/defis.js) -->
 <details class="accueil-options accueil-defis" id="accueil-defis">
@@ -315,6 +336,7 @@
           <button type="button" class="plein cest-parti" id="btn-cest-parti">C’est parti <span aria-hidden="true">▶</span></button>
         </div>
           </div>
+          <div class="rappel-sauve" id="rappel-sauvegarde" role="status" hidden><span></span><button type="button" class="plein petit" data-sauve="oui">Sauvegarder maintenant</button><button type="button" class="petit" data-sauve="plus-tard">Plus tard</button></div>
           <button type="button" class="accueil-prog" id="accueil-prog" title="Progression, défis et badges"></button>
         </div>
         </aside>
@@ -483,6 +505,9 @@
               <option value="15856629">Blanc</option>
               <option value="2899536">Noir</option>
             </select></label>
+            <label>Motif du maillot&nbsp;: <select id="avatar-motif"><option value="0" selected>Uni</option><option value="1">Manches contrastées</option><option value="3">Bas coloré</option><option value="6">Bande à la poitrine</option><option value="4">Bande centrale</option><option value="2">Une manche</option><option value="7">Manches et bas</option><option value="5">Dégradé</option><option value="8">Flammes</option></select></label>
+            <label>Deuxième couleur&nbsp;: <select id="avatar-maillot2"><option value="16744495">Orange</option><option value="3112191">Bleu</option><option value="4177754">Vert</option><option value="15022395">Rouge</option><option value="9064447">Violet</option><option value="16736162">Rose</option><option value="16765503">Jaune</option><option value="15856629" selected>Blanc</option><option value="2899536">Noir</option></select></label>
+            <label>Troisième couleur&nbsp;: <select id="avatar-maillot3"><option value="16744495">Orange</option><option value="3112191">Bleu</option><option value="4177754">Vert</option><option value="15022395">Rouge</option><option value="9064447">Violet</option><option value="16736162">Rose</option><option value="16765503">Jaune</option><option value="15856629">Blanc</option><option value="2899536" selected>Noir</option></select></label>
             <label>Bas&nbsp;: <select id="avatar-bas-style"><option value="cuissard" selected>Cuissard (jambes nues)</option><option value="long">Collant long</option></select></label>
             <label>Couleur du bas&nbsp;: <select id="avatar-bas">
               <option value="1851174" selected>Noir</option>
@@ -616,8 +641,11 @@
           <label><input type="checkbox" id="ravito" checked> Rappels pour boire (toutes les 15 min) et manger (à partir de 40 min)</label>
           <label><input type="checkbox" id="alerte-fc" checked> Alerte si ma fréquence cardiaque dépasse <input type="number" id="alerte-fc-seuil" value="92" min="70" max="100" style="width:4.5em"> % de ma FC max pendant 1 min</label>
           <label><input type="checkbox" id="alerte-erg" checked> Alerte si je suis à plus de 15 % de la puissance cible pendant 20 s (mode ERG)</label>
+          <label><input type="checkbox" id="alerte-cad" checked> Alerte si ma cadence s’écarte de plus de 8 tr/min de la cadence visée pendant 10 s (séances avec cadence)</label>
+          <label><input type="checkbox" id="erg-doux" checked> ERG&nbsp;: passer en douceur d’une puissance à l’autre (3 à 5 secondes)</label>
+          <label><input type="checkbox" id="erg-allege" checked> ERG&nbsp;: alléger la cible si ma cadence tombe sous <input type="number" id="erg-allege-seuil" value="45" min="30" max="70" style="width:4.5em"> tr/min pendant 4 s</label>
           <label>Durée visée de la sortie&nbsp;: <input type="number" id="alerte-duree" value="0" min="0" max="600" style="width:5em"> min (0 = aucune) · annonce 5 min avant la fin et à la fin</label>
-          <details class="reg-aide"><summary>En savoir plus</summary><div class="stats">Sur les pavés (±1,2 % de pente) et le gravier (±0,5 %), la résistance du home trainer varie toujours un peu ; cette case ne règle que les secousses de l’image.</div></details>
+          <details class="reg-aide"><summary>En savoir plus</summary><div class="stats">Quand la cadence s’effondre, un home trainer en ERG force de plus en plus&nbsp;: la cible descend alors à 60&nbsp;% en 2&nbsp;secondes, puis remonte en 10&nbsp;secondes dès que tu pédales de nouveau (12&nbsp;tr/min au-dessus du seuil pendant 3&nbsp;s). Pour un bloc à basse cadence voulue, le seuil est placé au moins 15&nbsp;tr/min sous la cadence visée. La cible affichée, les étoiles et le rapport restent ceux de la séance. Sans capteur de cadence, rien n’est allégé.</div></details>
         </fieldset>
         <fieldset data-r="son">
           <legend>Effets et son</legend>
@@ -627,6 +655,7 @@
         </fieldset>
         <fieldset data-r="affichage">
           <legend>Réglage du HUD</legend>
+          <label>Présentation&nbsp;: <select id="hud-presentation"><option value="auto" selected>Automatique (petit écran détecté)</option><option value="normal">Normale</option><option value="compact">Petit écran (tablette, petit ordinateur)</option><option value="tele">Télé, lue de loin (texte plus grand, moins d’encarts)</option></select></label>
           <label>Taille des encarts&nbsp;: <input type="range" id="hud-taille" min="60" max="150" step="5" value="100"> <span id="hud-taille-v">100&nbsp;%</span></label>
         </fieldset>
         <fieldset data-r="confort">
@@ -658,6 +687,8 @@
         <label class="bouton">Restaurer une sauvegarde<input type="file" id="fichier-sauvegarde" accept=".json,application/json" hidden></label>
         <span class="stats" id="msg-sauvegarde" aria-live="polite"></span>
       </div>
+      <label>Me rappeler de sauvegarder&nbsp;: <select id="sauve-rappel"><option value="5">toutes les 5 sorties</option><option value="10" selected>toutes les 10 sorties</option><option value="20">toutes les 20 sorties</option><option value="0">jamais</option></select></label>
+      <div class="stats" id="sauve-info"></div>
     </section>
     <section class="carte" data-r="donnees">
       <h2>Version</h2>
@@ -669,7 +700,27 @@
   <div id="progression" hidden role="dialog" aria-modal="true" aria-label="Progression"><div class="pg-carte" id="progression-c"></div></div>
 
   <div id="onglet-historique" hidden>
-    <div class="sous-onglets" id="hist-onglets" role="tablist" aria-label="Historique"><button type="button" role="tab" data-h="sorties" aria-selected="true">Sorties</button><button type="button" role="tab" data-h="analyse" aria-selected="false">Analyse</button><button type="button" role="tab" data-h="bilans" aria-selected="false">Bilans</button></div>
+    <div class="sous-onglets" id="hist-onglets" role="tablist" aria-label="Historique"><button type="button" role="tab" data-h="sorties" aria-selected="true">Sorties</button><button type="button" role="tab" data-h="analyse" aria-selected="false">Analyse</button><button type="button" role="tab" data-h="bilans" aria-selected="false">Bilans</button><button type="button" role="tab" data-h="records" aria-selected="false">Records</button></div>
+    <section class="carte" data-h="records" hidden>   <!-- (v105) Mes records : js/records.js -->
+      <h2>Meilleures puissances</h2>
+      <div class="grille-stats" id="rec-puissance"></div>
+      <div class="legende-graph">Meilleure moyenne tenue sur chaque durée, toutes les sorties confondues ; W/kg avec ton poids actuel.</div>
+      <h2>Tes plus grosses sorties</h2>
+      <div class="grille-stats" id="rec-sorties"></div>
+    </section>
+    <section class="carte" data-h="records" hidden>
+      <h2>Évolution de ta FTP</h2>
+      <p class="info" style="margin-top:0" id="rec-ftp-note"></p>
+      <div id="rec-ftp"></div>
+    </section>
+    <section class="carte" data-h="records" hidden>
+      <h2>Meilleurs tours</h2>
+      <div id="rec-tours"></div>
+    </section>
+    <section class="carte" data-h="records" hidden>
+      <h2>Records des segments chronométrés</h2>
+      <div id="rec-segments"></div>
+    </section>
     <section class="carte" data-h="bilans">
       <h2>Bilan de la semaine et du mois</h2>
       <div class="bilans" id="bilans"></div>
@@ -731,18 +782,14 @@
 
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<script src="js/chargement.js"></script>
+<script src="lib/three.min.js"></script>
 <script src="js/outils.js"></script>
 <script src="js/parcours-physique.js"></script>
 <script src="js/seance.js"></script>
 <script src="js/historique-interface.js"></script>
 <script src="js/analyse.js"></script>
 <script src="js/createur-seance.js"></script>
-<script src="js/modele-homme.js"></script>
-<script src="js/modele-femme.js"></script>
-<script src="js/textures-corps.js"></script>
-<script src="js/velos.js"></script>
-<script src="js/decor.js"></script>
 <script src="js/monde3d.js"></script>
 <script src="js/boucle-hud-son.js"></script>
 <script src="js/progression.js"></script>
@@ -758,11 +805,13 @@
 <script src="js/rapport.js"></script>
 <script src="js/nolio.js"></script>
 <script src="js/hud-seance.js"></script>
+<script src="js/records.js"></script>
+<script src="js/course-semaine.js"></script>
 <script src="js/demarrage.js"></script>
 <script src="js/accueil.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="lib/peerjs.min.js"></script>
 <script src="js/groupe.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+<script src="lib/html-to-image.js"></script>
 <script src="js/photos.js"></script>
 <script src="js/hud-perso.js"></script>
 <script src="js/garage.js"></script>

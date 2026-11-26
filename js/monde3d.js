@@ -368,13 +368,28 @@ const Monde3D = (function () {
     return c;
   }
 
-  let reelObjets = [], reelAFaire = false;
+  let reelObjets = [], reelAFaire = false, distRouteReel = null;
   function viderReel() {
     for (const o of reelObjets) {
       scene.remove(o);
       jeter(o);
     }
     reelObjets = [];
+    distRouteReel = null;
+  }
+  // (v105) contrôle des tests : objets du décor d'un monde réel posés à moins de `marge` m du milieu de la route [genre, distance, x, z]
+  function objetsSurRoute(marge) {
+    if (!distRouteReel) return null;
+    const res = [], m4 = new T.Matrix4();
+    const noter = (genre, x, z) => { const d = distRouteReel(x, z); if (d < marge) res.push([genre, Math.round(d * 100) / 100, Math.round(x), Math.round(z)]); };
+    for (const o of reelObjets) {
+      const g = o.userData.genre;
+      if (!g) continue;
+      if (o.isInstancedMesh) for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m4); noter(g, m4.elements[12], m4.elements[14]); }
+      else { const p = o.geometry.attributes.position.array; for (let i = 0; i < p.length; i += 3) noter(g, p[i], p[i + 2]); }
+    }
+    if (foretReel) for (const e of foretReel.recs) noter("végétation " + e.v, e.x, e.z);
+    return res;
   }
   function ajouterReel(o) { o.frustumCulled = false; scene.add(o); reelObjets.push(o); return o; }
   // libère la mémoire d'un objet retiré de la scène, sans toucher aux formes et textures partagées du décor Blender (réutilisées ailleurs)
@@ -539,20 +554,24 @@ const Monde3D = (function () {
     const Wm = r.maxx - r.minx, Hm = r.maxz - r.minz;
 
     /* --- index spatial du tracé (pour écarter les arbres de la route) --- */
+    // (v105) points du tracé tous les 2 m environ (le tracé GPS en a un par mètre) : avec ceux du sol (jusqu'à 13 m d'écart sur
+    // les longs parcours), un objet posé au milieu de la route entre deux points était cru à côté
     const CELL = 20, gridCh = new Map();
-    for (let i = 0; i < ns; i++) {
-      const k = Math.floor(sx[i] / CELL) + "," + Math.floor(sz[i] / CELL);
+    for (let i = 0; i < GEO.xs.length; i += 2) {
+      const k = Math.floor(GEO.xs[i] / CELL) + "," + Math.floor(GEO.zs[i] / CELL);
       let a = gridCh.get(k); if (!a) gridCh.set(k, a = []); a.push(i);
     }
+    // distance au milieu de la route ; 1e9 au-delà de 20 à 40 m
     const distChemin = (px, pz) => {
       const cx = Math.floor(px / CELL), cz = Math.floor(pz / CELL);
-      let best = 1e9;
+      let best = 1e18;
       for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
         const l = gridCh.get((cx + a) + "," + (cz + b));
-        if (l) for (const i of l) { const d = Math.hypot(sx[i] - px, sz[i] - pz); if (d < best) best = d; }
+        if (l) for (const i of l) { const dx = GEO.xs[i] - px, dz = GEO.zs[i] - pz, d2 = dx * dx + dz * dz; if (d2 < best) best = d2; }
       }
-      return best;
+      return best < 1e18 ? Math.sqrt(best) : 1e9;
     };
+    distRouteReel = distChemin;
 
     /* --- sol --- */
     const cell = Math.max(12, Math.sqrt(Wm * Hm / 300000));   // (v69) jusqu'à 300 000 points : ~20 m pour un monde de 15 km (montagne, lacets)
@@ -835,7 +854,7 @@ const Monde3D = (function () {
       }
       mbu.instanceMatrix.needsUpdate = true; if (mbu.instanceColor) mbu.instanceColor.needsUpdate = true;
       mbu.castShadow = true; mbu.receiveShadow = true;
-      ajouterReel(mbu);
+      mbu.userData.genre = "buissons"; ajouterReel(mbu);
     }
     if (osm && osm.barrieres && osm.barrieres.length) construireBarrieres(osm.barrieres, hSol, distChemin);
 
@@ -876,7 +895,7 @@ const Monde3D = (function () {
         }
         mh.instanceMatrix.needsUpdate = true; if (mh.instanceColor) mh.instanceColor.needsUpdate = true;
         mh.receiveShadow = true;
-        ajouterReel(mh);
+        mh.userData.genre = "herbes"; ajouterReel(mh);
         if (fl.length) {
           const gf = new T.IcosahedronGeometry(0.17, 0); gf.translate(0, 0.62, 0);
           const mfl = new T.InstancedMesh(gf, new T.MeshLambertMaterial({ color: 0xffffff }), fl.length);
@@ -886,7 +905,7 @@ const Monde3D = (function () {
             mfl.setColorAt(i, tmpC.set(CF[Math.floor(fl[i][2] * 311) % 5]));
           }
           mfl.instanceMatrix.needsUpdate = true; if (mfl.instanceColor) mfl.instanceColor.needsUpdate = true;
-          ajouterReel(mfl);
+          mfl.userData.genre = "fleurs"; ajouterReel(mfl);
         }
       }
     }
@@ -908,6 +927,10 @@ const Monde3D = (function () {
         lampes.push([_q[0] + Math.cos(h) * cote * 5.8, _q[1] + Math.sin(h) * cote * 5.8, [_q[0], _q[1]]]);
       }
     }
+    // (v105) rien sur la chaussée : les objets de la carte sont à leur vraie place, qui tombe parfois sur la route du jeu
+    // (large de 10 m autour du tracé GPS) ; les poteaux posés par le jeu sont aussi vérifiés (virages serrés, routes voisines)
+    const horsRoute = (liste, marge) => { for (let i = liste.length - 1; i >= 0; i--) if (distChemin(liste[i][0], liste[i][1]) < marge) liste.splice(i, 1); };
+    horsRoute(lampes, DEMI_G + 0.4); horsRoute(bornes, DEMI_G + 0.2); horsRoute(bancs, DEMI_G + 0.9);
     if (lampes.length) {
       const g = fusionner([(() => { const t = new T.CylinderGeometry(0.07, 0.1, 5.2, 6); t.translate(0, 2.6, 0); return t; })(),
         (() => { const t = new T.BoxGeometry(1.1, 0.18, 0.38); t.translate(0.5, 5.25, 0); return t; })()]);
@@ -918,14 +941,14 @@ const Monde3D = (function () {
         matrice(ml, i, q[0], hSol(q[0], q[1]) - 0.05, q[1], rot, 1, 1, 1);
       }
       ml.instanceMatrix.needsUpdate = true; ml.castShadow = true; ml.receiveShadow = true;
-      ajouterReel(ml);
+      ml.userData.genre = "lampadaires"; ajouterReel(ml);
     }
     if (bornes.length) {
       const gb = (() => { const t = new T.CylinderGeometry(0.1, 0.12, 0.85, 8); t.translate(0, 0.42, 0); return t; })();
       const mb2 = new T.InstancedMesh(gb, new T.MeshLambertMaterial({ color: 0xf1f3f5 }), bornes.length);
       for (let i = 0; i < bornes.length; i++) matrice(mb2, i, bornes[i][0], hSol(bornes[i][0], bornes[i][1]), bornes[i][1], 0, 1, 1, 1);
       mb2.instanceMatrix.needsUpdate = true; mb2.castShadow = true; mb2.receiveShadow = true;
-      ajouterReel(mb2);
+      mb2.userData.genre = "bornes"; ajouterReel(mb2);
     }
     if (bancs.length) {
       const g = fusionner([(() => { const t = new T.BoxGeometry(1.7, 0.1, 0.5); t.translate(0, 0.5, 0); return t; })(),
@@ -935,7 +958,7 @@ const Monde3D = (function () {
       const mb = new T.InstancedMesh(g, new T.MeshLambertMaterial({ color: 0x9b6a3c }), bancs.length);
       for (let i = 0; i < bancs.length; i++) matrice(mb, i, bancs[i][0], hSol(bancs[i][0], bancs[i][1]), bancs[i][1], hash(i * 5.3) * 6.283, 1, 1, 1);
       mb.instanceMatrix.needsUpdate = true; mb.castShadow = true; mb.receiveShadow = true;
-      ajouterReel(mb);
+      mb.userData.genre = "bancs"; ajouterReel(mb);
     }
     if (osm && osm.routes) {
       const voitures = [];
@@ -976,7 +999,7 @@ const Monde3D = (function () {
         mc.instanceMatrix.needsUpdate = true; mk.instanceMatrix.needsUpdate = true;
         if (mc.instanceColor) mc.instanceColor.needsUpdate = true;
         mc.castShadow = mk.castShadow = true; mc.receiveShadow = mk.receiveShadow = true;
-        ajouterReel(mc); ajouterReel(mk);
+        mc.userData.genre = "voitures"; ajouterReel(mc); ajouterReel(mk);
       }
     }
   }
@@ -1004,6 +1027,8 @@ const Monde3D = (function () {
         const tx = (c[0] - a[0]) / L, tz = (c[1] - a[1]) / L, nx = -tz * s.w / 2, nz = tx * s.w / 2, n = Math.max(1, Math.ceil(L / 8));
         for (let k = 0; k < n; k++) {
           const x0 = a[0] + (c[0] - a[0]) * k / n, z0 = a[1] + (c[1] - a[1]) * k / n, x1 = a[0] + (c[0] - a[0]) * (k + 1) / n, z1 = a[1] + (c[1] - a[1]) * (k + 1) / n;
+          // (v105) pas de haie, clôture ni mur en travers de la route (morceaux de 8 m au plus, contrôlés tous les 2 m au plus)
+          if ([0, 0.25, 0.5, 0.75, 1].some((t) => distCh(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t) < DEMI_G + 0.2)) continue;
           const y0 = hSol(x0, z0) - 0.1, y1 = hSol(x1, z1) - 0.1;
           col.setHex(s.c); if (b.k === "hedge") col.offsetHSL(0, 0, (hash(x0 * 0.7 + z0) - 0.5) * 0.08);
           quad([x0 + nx, y0, z0 + nz], [x1 + nx, y1, z1 + nz], [x1 + nx, y1 + s.h, z1 + nz], [x0 + nx, y0 + s.h, z0 + nz], [nx, 0, nz]);
@@ -1020,7 +1045,7 @@ const Monde3D = (function () {
     g.setAttribute("color", new T.BufferAttribute(new Float32Array(C), 3));
     const m = new T.Mesh(g, new T.MeshLambertMaterial({ vertexColors: true }));
     m.castShadow = true; m.receiveShadow = true;
-    ajouterReel(m);
+    m.userData.genre = "barrières"; ajouterReel(m);
   }
 
   // plus petit rectangle orienté contenant le contour (orienté selon l'un de ses murs) ; null si le contour le remplit à moins de 85 %
@@ -2308,6 +2333,11 @@ const Monde3D = (function () {
     }
     return { NV, sets, poser };
   }
+  // corps réalistes fabriqués à la création de la 3D (v105 : leurs fichiers sont chargés en arrière-plan, après l'interface)
+  let corpsPrepares = false;
+  function preparerCorps() {
+    if (corpsPrepares) return;
+    corpsPrepares = true;
   // corps d'homme réaliste (MakeHuman, domaine public) : js/modele-homme.js
   try {
     if (typeof MODELE_H !== "undefined") ModeleH = fabriquerModele({ N: MODELE_H.N, n: MODELE_H.n, g1: MODELE_H.g1, g2: MODELE_H.g2, w: MODELE_H.w, homme: { p: MODELE_H.p, tri: MODELE_H.tri, counts: MODELE_H.counts, j: MODELE_H.j } }, MODELE_H.e);
@@ -2316,6 +2346,7 @@ const Monde3D = (function () {
   try {
     if (ModeleH && typeof MODELE_F !== "undefined") ModeleF = fabriquerModele({ N: MODELE_F.N, n: MODELE_F.n, g1: MODELE_H.g1, g2: MODELE_H.g2, w: MODELE_H.w, femme: { p: MODELE_F.p, tri: MODELE_H.tri, counts: MODELE_H.counts, j: MODELE_F.j } }, MODELE_F.e);
   } catch (e) { ModeleF = null; console.warn("corps de femme indisponible", e); }
+  }
   // textures des corps réalistes (js/textures-corps.js) : détails de la peau MakeHuman, ombres douces calculées par Blender, yeux, cils, sourcils
   const texCorps = {};
   function texC(nom, image) {
@@ -4119,6 +4150,11 @@ function jeterCoureur(c) {
     if (corps.modeleH) {
       const u = corps.modeleH.matCorps.userData.u, cp = COUPES[apparence.coiffure] || COUPES.court;
       u.uLong.value = long ? 1 : 0;
+      // (v105) motif du maillot (mêmes réglages que les équipes) ; décalages mesurés sur le corps de femme (v89)
+      u.uMotif.value = apparence.motif || 0;
+      u.uMaillot2.value.set(apparence.maillot2 !== undefined ? apparence.maillot2 : 0xffffff);
+      u.uMaillot3.value.set(apparence.maillot3 !== undefined ? apparence.maillot3 : 0x2c3e50);
+      u.uKitDy.value = genre === "femme" ? 0.11 : 0; u.uKitSx.value = genre === "femme" ? 1.09 : 1;
       u.uChaussette.value = new T.Color(apparence.chaussettes);                  // (v69 suite) couleur des chaussettes choisie
       if (corps.modeleH.mats[13] && corps.modeleH.mats[13].userData.uChaus) corps.modeleH.mats[13].userData.uChaus.value.set(apparence.chaussettes);
       u.uEpCh.value = apparence.casque ? Math.min(cp.ep, 0.002) : cp.ep; u.uRecul.value = cp.recul; u.uNuque.value = cp.nuque; u.uRase.value = cp.rase || 0;
@@ -6096,6 +6132,7 @@ function jeterCoureur(c) {
   /* ---------- API ---------- */
   function creer(canvas, opts) {
     opts = opts || {};
+    preparerCorps();
     T = opts.THREE || THREE;
     if (T.ColorManagement) {
       if ("legacyMode" in T.ColorManagement) T.ColorManagement.legacyMode = false;
@@ -6431,6 +6468,8 @@ function jeterCoureur(c) {
       if (o.yeux === "marron" || IRIS[o.yeux]) apparence.yeux = o.yeux;
       if (o.casqueCouleur !== undefined && isFinite(o.casqueCouleur)) apparence.casqueCouleur = o.casqueCouleur | 0;
       if (STYLES_CASQUE.includes(o.casqueStyle)) apparence.casqueStyle = o.casqueStyle;
+      if (o.motif !== undefined) apparence.motif = Math.max(0, Math.min(8, o.motif | 0));   // (v105) motif du maillot
+      for (const k of ["maillot2", "maillot3"]) if (o[k] !== undefined && isFinite(o[k])) apparence[k] = o[k] | 0;
       if (VERRES[o.verres]) apparence.verres = o.verres;
       if (o.casque !== undefined) apparence.casque = !!o.casque;
       if (o.lunettes !== undefined) apparence.lunettes = !!o.lunettes;
@@ -6459,6 +6498,7 @@ function jeterCoureur(c) {
     definirEffets: (o) => { if (o && o.pietons !== undefined) pietonsNiveau = o.pietons | 0; if (o && o.poussiere !== undefined) poussOn = !!o.poussiere; if (o && o.foule !== undefined) { fouleNiveau = o.foule | 0; fouleCle = ""; } },
     definirMeteo: (m) => { if (renderer) definirMeteo(m); },
     // (v104) mémoire de la carte graphique, pour vérifier qu'elle ne grossit pas d'une course à l'autre
+    objetsSurRoute: (marge) => objetsSurRoute(marge),
     memoire: () => (renderer ? { formes: renderer.info.memory.geometries, textures: renderer.info.memory.textures } : null),
     pluie: () => meteoVal.pluie,           // (v69) pour le son : intensité de la pluie (0 à 1) et nombre d’éclairs (le tonnerre suit chaque éclair)
     eclairs: () => nbEclairs,

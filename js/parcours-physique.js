@@ -195,6 +195,7 @@ const Aero = (function () {
 
   function maj(dt, etat) {                                 // le vent suit la météo : force, rafales, direction qui évolue
     v.t += dt;
+    if (reg.ventFixe) { v.dir = reg.ventFixe.dir; v.vit = reg.ventFixe.vit; v.etat = etat; return; }   // (v105) course de la semaine : même vent chez tout le monde
     if (etat !== v.etat) { if (v.etat) v.dir += (Math.random() - 0.5) * 2.2; v.etat = etat; }
     v.dir += (Math.random() - 0.5) * 0.06 * dt;
     const base = (VENT_METEO[etat] || 3.5) * (1 + 0.25 * Math.sin(v.t / 23) + 0.12 * Math.sin(v.t / 7.3));
@@ -301,7 +302,7 @@ const Peloton = (function () {
   }
   // (v69 suite) coureurs tirés au hasard : profil, nom, femme ou homme, allure, maillot, x = place dans la fourchette du niveau (0 à 1) ;
   // gardés d'une étape à l'autre d'un Tour (o.equipe)
-  function tirerEquipe(n, enEquipe, couleurUser) {
+  function tirerEquipe(n, enEquipe, couleurUser, kitUser) {
     n = Math.max(1, Math.min(MAX_IA, n | 0 || 4));
     const pris = new Set(), couleurs = PALETTE.slice().sort(() => Math.random() - 0.5), l = []; let kitsT = null;
     for (let i = 0; i < n; i++) {
@@ -311,7 +312,7 @@ const Peloton = (function () {
       if (enEquipe) {
         const eq = i < 4 ? 0 : 1 + Math.floor((i - 4) / 5);
         if (!kitsT) kitsT = KITS_EQUIPES.slice().sort(() => Math.random() - 0.5);
-        const kit = eq === 0 ? { c1: couleurUser || COUL_EQUIPE0, motif: 0 } : kitsT[(eq - 1) % kitsT.length];   // tes coéquipiers portent ton maillot
+        const kit = eq === 0 ? Object.assign({ motif: 0 }, kitUser, { c1: couleurUser || COUL_EQUIPE0 }) : kitsT[(eq - 1) % kitsT.length];   // tes coéquipiers portent ton maillot (et son motif, v105)
         l[i].eq = eq; l[i].kit = kit; l[i].couleur = kit.c1; l[i].nomEq = eq === 0 ? NOMS_EQUIPES[0] : kit.nom;
       }
     }
@@ -323,7 +324,7 @@ const Peloton = (function () {
     if (o.mode === "clm" && boucleC) toursC = Math.max(1, toursC);    // contre-la-montre : toujours une arrivée
     mode = o.mode || "aucun"; d0 = o.d0 || 0; L = o.longueur || 0; pente = o.pente || (() => 0);
     ftpUser = o.ftp || 200; poidsUser = o.poids || 75; wpUser = o.wprime || 14841; t = 0; parti = false; coureurs = []; user = { d: d0, v: 0, fin: null, vue: false, voie: 0.9, pass: [0] };
-    graine = (o.graine || 12345) + Math.round(ftpUser * 7 + poidsUser);
+    graine = o.graineFixe || (o.graine || 12345) + Math.round(ftpUser * 7 + poidsUser);   // (v105) graineFixe : mêmes attaques chez tout le monde
     if (mode === "aucun") return;
     const wkg = ftpUser / poidsUser, wpKg = wpUser / poidsUser, [lo, hi] = NIVEAUX[o.niveau] || NIVEAUX.equilibre;
     // o.nombre coureurs (4 à 12) : un de chaque profil, puis des profils tirés au hasard ; femme ou homme, maillot et allure au hasard

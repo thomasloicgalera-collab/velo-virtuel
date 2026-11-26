@@ -489,10 +489,10 @@ const Progression = (function () {
     if (typeof Deblocage === "undefined") return "";
     const l = Deblocage.tout(), nb = l.filter((x) => x.ouvert).length;
     return "<h3>Matériel à débloquer <small>" + nb + " / " + l.length + '</small></h3><div class="pg-materiel">' + l.map((x) =>
-      '<div class="pg-mat' + (x.ouvert ? " ok" : "") + '"><i>' + (x.ouvert ? "✓" : "🔒") + "</i><b>" + x.nom + "</b><span>" + (x.velo ? "Vélo" : "Roues") + " · niveau " + x.niveau +
+      '<div class="pg-mat' + (x.ouvert ? " ok" : "") + '"><i>' + (x.ouvert ? "✓" : "🔒") + "</i><b>" + x.nom + "</b><span>" + ({ velo: "Vélo", roues: "Roues", maillot: "Motif de maillot" })[x.type] + " · niveau " + x.niveau +
       (x.ouvert ? "" : " · encore " + Deblocage.xpRestant(x.niveau) + " XP") + "</span></div>").join("") + "</div>";
   }
-  const texteProchain = (p) => p.items.map((x) => (x.velo ? "vélo " : "roues ") + x.nom.replace(/\s*\(.*\)$/, "")).join(", ");
+  const texteProchain = (p) => p.items.map((x) => ({ velo: "vélo ", roues: "roues ", maillot: "maillot " })[x.type] + x.nom.replace(/\s*\(.*\)$/, "")).join(", ");
   // partie « Progression » du résumé de fin de sortie
   function htmlResume(g) {
     if (!g) return "";
@@ -500,7 +500,7 @@ const Progression = (function () {
     if (g.apres.n > g.avant.n) h += '<div class="rf-niveau">Niveau supérieur ! Tu passes au niveau ' + g.apres.n + ".</div>";
     h += '<div class="rf-gains">' + g.gains.filter((x) => x[1] > 0).map((x) => "<span>" + x[0] + " <b>+" + x[1] + "</b></span>").join("") + "</div>";
     for (const b of g.badges) h += '<div class="rf-badge"><i>' + b.ico + "</i><b>Nouveau badge : " + b.nom + "</b><span>" + b.desc + "</span></div>";
-    for (const x of g.deblocages || []) h += '<div class="rf-badge rf-debloque"><i>🔓</i><b>Débloqué : ' + x.nom + "</b><span>" + (x.velo ? "Nouveau vélo" : "Nouvelles roues") + " (niveau " + x.niveau + "), à choisir dans Mon garage</span></div>";
+    for (const x of g.deblocages || []) h += '<div class="rf-badge rf-debloque"><i>🔓</i><b>Débloqué : ' + x.nom + "</b><span>" + ({ velo: "Nouveau vélo", roues: "Nouvelles roues", maillot: "Nouveau motif de maillot" })[x.type] + " (niveau " + x.niveau + "), à choisir dans Mon garage</span></div>";
     const pr = typeof Deblocage !== "undefined" ? Deblocage.prochain() : null;
     if (pr) h += '<div class="rf-prochain">Prochain déblocage au niveau ' + pr.niveau + " (encore " + pr.xp + " XP) : " + texteProchain(pr) + "</div>";
     h += "</div>";

@@ -3,24 +3,29 @@
    (v97) Alertes pendant la sortie (Réglages → Sensations de route) :
    - fréquence cardiaque trop haute (au-dessus d'un pourcentage de la FC max pendant 1 minute) ;
    - en mode ERG, puissance trop éloignée de la cible (plus de 15 % pendant 20 secondes) ;
+   - (v105) cadence à plus de 8 tr/min de la cadence visée du bloc pendant 10 secondes ;
    - durée visée : annonce 5 minutes avant la fin, puis à la fin.
+   Les réglages de l'ERG plus doux (transitions, allègement : `ErgDoux` dans seance.js) sont gardés avec ceux des alertes.
    Réglages gardés dans velo_alertes_v1. Les annonces utilisent `annoncer` (grande annonce au centre de l'écran de course).
    ===================================================================== */
 const Alertes = (function () {
   const CLE = "velo_alertes_v1";
-  const DEFAUT = { fc: true, fcSeuil: 92, erg: true, duree: 0 };
+  const DEFAUT = { fc: true, fcSeuil: 92, erg: true, duree: 0, cad: true, douce: true, allege: true, allegeSeuil: 45 };
+  const CHAMPS = ["alerte-fc", "alerte-fc-seuil", "alerte-erg", "alerte-duree", "alerte-cad", "erg-doux", "erg-allege", "erg-allege-seuil"];
   const lire = () => { try { return Object.assign({}, DEFAUT, JSON.parse(localStorage.getItem(CLE)) || {}); } catch (e) { return Object.assign({}, DEFAUT); } };
   let cfg = lire();
-  const st = { fcT: 0, fcAttente: 0, ergT: 0, ergAttente: 0, tPrec: 0, cinq: false, atteinte: false };
+  const st = { fcT: 0, fcAttente: 0, ergT: 0, ergAttente: 0, cadT: 0, cadAttente: 0, cadIv: null, cadDebut: 0, tPrec: 0, cinq: false, atteinte: false };
 
   function enregistrer() {
-    cfg = { fc: $("alerte-fc").checked, fcSeuil: Math.max(70, Math.min(100, parseInt($("alerte-fc-seuil").value, 10) || 92)), erg: $("alerte-erg").checked, duree: Math.max(0, Math.min(600, parseInt($("alerte-duree").value, 10) || 0)) };
+    cfg = { fc: $("alerte-fc").checked, fcSeuil: Math.max(70, Math.min(100, parseInt($("alerte-fc-seuil").value, 10) || 92)), erg: $("alerte-erg").checked, duree: Math.max(0, Math.min(600, parseInt($("alerte-duree").value, 10) || 0)),
+      cad: $("alerte-cad").checked, douce: $("erg-doux").checked, allege: $("erg-allege").checked, allegeSeuil: Math.max(30, Math.min(70, parseInt($("erg-allege-seuil").value, 10) || 45)) };
     try { localStorage.setItem(CLE, JSON.stringify(cfg)); } catch (e) { /* stockage indisponible */ }
   }
   function afficher() {
     if (!$("alerte-fc")) return;
     $("alerte-fc").checked = cfg.fc; $("alerte-fc-seuil").value = cfg.fcSeuil; $("alerte-erg").checked = cfg.erg; $("alerte-duree").value = cfg.duree;
-    ["alerte-fc", "alerte-fc-seuil", "alerte-erg", "alerte-duree"].forEach((id) => $(id).addEventListener("change", enregistrer));
+    $("alerte-cad").checked = cfg.cad; $("erg-doux").checked = cfg.douce; $("erg-allege").checked = cfg.allege; $("erg-allege-seuil").value = cfg.allegeSeuil;
+    CHAMPS.forEach((id) => $(id).addEventListener("change", enregistrer));
   }
   afficher();
 
@@ -29,12 +34,25 @@ const Alertes = (function () {
     try { if (typeof Son !== "undefined" && Son.bip) { Son.bip(880, 0.12); setTimeout(() => Son.bip(660, 0.15), 160); } } catch (e) { /* son indisponible */ }
     log("Alerte : " + titre + " · " + detail);
   };
+  // (v105) cadence visée du bloc en cours : 15 s pour s'installer, puis alerte après 10 s à plus de 8 tr/min d'écart
+  function tickCadence(dt) {
+    const cur = cfg.cad && modeActuel() === "erg" && !seance.dyn && !seance.puisCourse && seance.intervalles.length ? intervalleA(balade.temps - seance.t0) : null;
+    const iv = cur ? cur.iv : null, cad = balade.cadence;
+    if (!iv || !iv.cad) { st.cadIv = null; st.cadT = 0; return; }
+    if (st.cadIv !== iv) { st.cadIv = iv; st.cadT = 0; st.cadDebut = balade.temps; }
+    if (cad > 0 && Math.abs(cad - iv.cad) > 8 && balade.temps - st.cadDebut > 15) st.cadT += dt; else st.cadT = Math.max(0, st.cadT - dt * 2);
+    if (st.cadT >= 10 && st.cadAttente <= 0) {
+      st.cadAttente = 45; st.cadT = 0;
+      alerte(cad > iv.cad ? "Ralentis les jambes" : "Accélère les jambes", Math.round(cad) + " tr/min pour " + iv.cad + " visés");
+    }
+  }
   // appelée à chaque tour de la boucle principale (dt = secondes écoulées)
   function tick(dt, puissance) {
     if (!balade.enCours || $("world-jeu").hidden) return;
-    if (balade.temps < st.tPrec - 1) { st.fcT = st.ergT = 0; st.fcAttente = st.ergAttente = 0; st.cinq = st.atteinte = false; }   // nouvelle sortie
+    if (balade.temps < st.tPrec - 1) { st.fcT = st.ergT = st.cadT = 0; st.fcAttente = st.ergAttente = st.cadAttente = 0; st.cadIv = null; st.cinq = st.atteinte = false; }   // nouvelle sortie
     st.tPrec = balade.temps;
-    st.fcAttente = Math.max(0, st.fcAttente - dt); st.ergAttente = Math.max(0, st.ergAttente - dt);
+    st.fcAttente = Math.max(0, st.fcAttente - dt); st.ergAttente = Math.max(0, st.ergAttente - dt); st.cadAttente = Math.max(0, st.cadAttente - dt);
+    tickCadence(dt);
     // fréquence cardiaque
     if (cfg.fc && typeof fcActuelle === "function") {
       const fc = fcActuelle(), lim = cfg.fcSeuil / 100 * fcmax();
@@ -42,7 +60,7 @@ const Alertes = (function () {
       if (st.fcT >= 60 && st.fcAttente <= 0) { st.fcAttente = 240; alerte("Cœur trop haut", fc + " bpm, soit " + Math.round(100 * fc / fcmax()) + " % de ta FC max : ralentis un peu"); }
     }
     // puissance cible (ERG)
-    if (cfg.erg && modeActuel() === "erg" && seance.cibleW > 0 && puissance !== null && !seance.puisCourse) {
+    if (cfg.erg && modeActuel() === "erg" && seance.cibleW > 0 && puissance !== null && !seance.puisCourse && !ErgDoux.allege()) {   // (v105) cible allégée : c'est normal d'être en dessous
       const ec = (puissance - seance.cibleW) / seance.cibleW;
       if (Math.abs(ec) > 0.15 && balade.temps - (seance.cibleDepuis || 0) > 15) st.ergT += dt; else st.ergT = Math.max(0, st.ergT - dt * 2);
       if (st.ergT >= 20 && st.ergAttente <= 0) { st.ergAttente = 90; st.ergT = 0; alerte(ec > 0 ? "Trop fort" : "Trop mou", Math.round(puissance) + " W pour " + seance.cibleW + " W visés (" + (ec > 0 ? "+" : "−") + Math.round(Math.abs(ec) * 100) + " %)"); }

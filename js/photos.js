@@ -2,7 +2,7 @@
 /* ---------- (v72) Photos de la sortie, à publier sur Strava ----------
    Touche P ou bouton « 📷 Photo » : la photo reproduit l'écran du mode plein écran (#monde-conteneur : vue 3D et encarts du HUD).
    L'image 3D est copiée juste après son dessin (boucle3D appelle Photos.apresDessin : sans preserveDrawingBuffer elle serait vide),
-   puis les encarts sont dessinés par-dessus avec la bibliothèque html-to-image (CDN). 5 photos au plus par sortie, gardées en
+   puis les encarts sont dessinés par-dessus avec la bibliothèque html-to-image (dans lib/). 5 photos au plus par sortie, gardées en
    mémoire et proposées au téléchargement dans le résumé de fin (Strava n'accepte pas l'envoi de photos par une autre
    application : on les ajoute à la main sur la page de l'activité). */
 const Photos = (function () {
@@ -41,7 +41,7 @@ const Photos = (function () {
   // les encarts du HUD tels qu'ils sont à l'écran, à la même échelle que l'image 3D (fond du cadre transparent)
   async function ajouterEncarts(g, W, H) {
     const box = $("monde-conteneur");
-    if (typeof htmlToImage === "undefined" || !box.clientWidth) return;     // bibliothèque absente (hors ligne) : la vue 3D seule
+    if (typeof htmlToImage === "undefined" || !box.clientWidth) return;     // bibliothèque absente : la vue 3D seule
     try {
       const hud = await htmlToImage.toCanvas(box, { pixelRatio: W / box.clientWidth, skipFonts: true, cacheBust: false,
         style: { background: "transparent", borderRadius: "0", boxShadow: "none", margin: "0" },

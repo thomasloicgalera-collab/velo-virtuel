@@ -78,7 +78,8 @@ function marquerPastilles() {
 }
 function lireApparence() {
   Deblocage.corriger();                                    // (v101) un réglage enregistré ou restauré ne passe pas outre les niveaux
-  return { peau: parseInt($("avatar-peau").value, 10), cheveux: parseInt($("avatar-cheveux").value, 10), coiffure: $("avatar-coiffure").value, barbe: $("avatar-barbe").value, casqueCouleur: parseInt($("avatar-casque-couleur").value, 10), casqueStyle: $("avatar-casque-style").value, verres: $("avatar-verres").value,
+  return { motif: parseInt($("avatar-motif").value, 10) || 0, maillot2: parseInt($("avatar-maillot2").value, 10), maillot3: parseInt($("avatar-maillot3").value, 10),
+    peau: parseInt($("avatar-peau").value, 10), cheveux: parseInt($("avatar-cheveux").value, 10), coiffure: $("avatar-coiffure").value, barbe: $("avatar-barbe").value, casqueCouleur: parseInt($("avatar-casque-couleur").value, 10), casqueStyle: $("avatar-casque-style").value, verres: $("avatar-verres").value,
     bas: parseInt($("avatar-bas").value, 10), chaussettes: parseInt($("avatar-chaussettes").value, 10), yeux: $("avatar-yeux").value, basStyle: $("avatar-bas-style").value, casque: $("avatar-casque").checked, lunettes: $("avatar-lunettes").checked, realiste: $("avatar-realiste").checked, velo: $("avatar-velo").value, roues: $("avatar-roues").value };
 }
 function dessinPolygones() {
@@ -175,7 +176,7 @@ remplirPastilles("pastilles-peau", PEAUX, "avatar-peau");
 remplirPastilles("pastilles-cheveux", CHEVEUX, "avatar-cheveux");
 marquerPastilles();
 $("sexe").addEventListener("change", () => { $("avatar-coiffure").value = $("sexe").value === "femme" ? "chignon" : "court"; appliquerAvatar(); sauverReglages(); });
-["avatar-maillot", "avatar-coiffure", "avatar-barbe", "avatar-casque-couleur", "avatar-casque-style", "avatar-verres", "avatar-bas", "avatar-chaussettes", "avatar-yeux", "avatar-bas-style", "avatar-casque", "avatar-lunettes", "avatar-realiste", "avatar-velo", "avatar-roues"].forEach((id) => $(id).addEventListener("change", () => { if (id === "avatar-velo") veloAvantClm = null; appliquerAvatar(); sauverReglages(); }));   // (v89) un vélo choisi à la main n'est plus remplacé par celui d'avant le contre-la-montre
+["avatar-maillot", "avatar-coiffure", "avatar-barbe", "avatar-casque-couleur", "avatar-casque-style", "avatar-verres", "avatar-bas", "avatar-chaussettes", "avatar-yeux", "avatar-bas-style", "avatar-casque", "avatar-lunettes", "avatar-realiste", "avatar-velo", "avatar-roues", "avatar-motif", "avatar-maillot2", "avatar-maillot3"].forEach((id) => $(id).addEventListener("change", () => { if (id === "avatar-velo") veloAvantClm = null; appliquerAvatar(); sauverReglages(); }));   // (v89) un vélo choisi à la main n'est plus remplacé par celui d'avant le contre-la-montre
 ["peloton-mode", "peloton-niveau"].forEach((id) => $(id).addEventListener("change", sauverReglages));
 $("peloton-tours").addEventListener("change", () => { sauverReglages(); majResumeChoix(); });
 $("peloton-nombre").addEventListener("change", sauverReglages);
@@ -187,6 +188,20 @@ function appliquerTailleHud() {
   $("hud-taille-v").textContent = v + "\u00a0%";
 }
 $("hud-taille").addEventListener("input", () => { appliquerTailleHud(); sauverReglages(); });
+// (v105) présentation de l'écran de course : normale, petit écran ou télé ; sur un petit écran peu haut, la course prend toute la fenêtre
+function majPresentation() {
+  const choix = $("hud-presentation").value;
+  const eff = choix === "auto" ? (window.innerWidth < 960 || window.innerHeight < 620 ? "compact" : "normal") : choix;
+  $("monde-conteneur").dataset.presentation = eff;
+  const plein = eff === "compact" && window.innerHeight < 620 && !$("onglet-world").hidden && !$("world-jeu").hidden;
+  if (plein === document.body.classList.contains("course-plein")) return;
+  document.body.classList.toggle("course-plein", plein);
+  if (plein) window.scrollTo(0, 0);
+  window.dispatchEvent(new Event("resize"));            // la 3D et les profils reprennent leur nouvelle taille
+}
+$("hud-presentation").addEventListener("change", () => { majPresentation(); sauverReglages(); });
+window.addEventListener("resize", majPresentation);
+for (const id of ["onglet-world", "world-jeu"]) new MutationObserver(majPresentation).observe($(id), { attributes: true, attributeFilter: ["hidden"] });
 $("vue-camera").addEventListener("change", () => { if (monde3d) monde3d.definirVue($("vue-camera").value); sauverReglages(); });
 $("resolution").addEventListener("change", () => { if (monde3d) monde3d.definirResolution(parseInt($("resolution").value, 10)); sauverReglages(); });
 ["age", "taille"].forEach((id) => $(id).addEventListener("change", sauverReglages));
@@ -245,6 +260,8 @@ function tirerAmbiance(appliquer) {
   for (const [cle, id] of [["ravito", "ravito"], ["zonesFcAuto", "zones-fc-auto"]]) if (r[cle] === false) $(id).checked = false;   // (v69 suite)
   $("freinage").checked = true; Aero.reg.frein = true;      // (v72) freinage avant les virages toujours actif, plus réglable
   if (r.hudTaille) $("hud-taille").value = r.hudTaille;
+  if (["auto", "normal", "compact", "tele"].includes(r.hudPresentation)) $("hud-presentation").value = r.hudPresentation;   // (v105)
+  majPresentation();
   appliquerTailleHud();
   if (r.pelotonNiveau) $("peloton-niveau").value = r.pelotonNiveau;
   if (r.pelotonTours !== undefined) $("peloton-tours").value = r.pelotonTours;
@@ -263,6 +280,8 @@ function tirerAmbiance(appliquer) {
     if (ap.casqueCouleur) $("avatar-casque-couleur").value = String(ap.casqueCouleur);
     if (ap.casqueStyle && $("avatar-casque-style").querySelector("option[value=\"" + ap.casqueStyle + "\"]")) $("avatar-casque-style").value = ap.casqueStyle;
     if (ap.verres) $("avatar-verres").value = ap.verres;
+    for (const [id, v] of [["avatar-motif", ap.motif], ["avatar-maillot2", ap.maillot2], ["avatar-maillot3", ap.maillot3]])   // (v105)
+      if (v !== undefined && $(id).querySelector('option[value="' + parseInt(v, 10) + '"]')) $(id).value = String(parseInt(v, 10));
     if (ap.velo && $("avatar-velo").querySelector('option[value="' + ap.velo + '"]')) $("avatar-velo").value = ap.velo;
     if (ap.roues && $("avatar-roues").querySelector('option[value="' + ap.roues + '"]')) $("avatar-roues").value = ap.roues;
     majMateriel();                                   // poids et aéro du vélo et des roues retrouvés
@@ -291,8 +310,11 @@ function tirerAmbiance(appliquer) {
     log("Bluetooth Web indisponible dans ce navigateur.");
   }
   setInterval(rafraichir, 250);
-  demarrer3D();
+  // (v105) la 3D démarre dès que ses gros fichiers sont arrivés, sans retarder l'historique
+  const trois = Chargement.donnees3D().then(() => { demarrer3D(); majApercu(); });
   await initialiserStockage();
   await majHistorique();
+  await trois;
   chargerMondes();
+  if (typeof CourseSemaine !== "undefined") CourseSemaine.rendre();   // (v105) carte de l'accueil
 })();

@@ -1342,3 +1342,103 @@ body:has(#st-trainer.ok, #st-power.ok, #st-hr.ok) .puce-connexion i { background
 
 /* créateur de séances : cadence visée */
 .crea-cad { white-space: nowrap; font-size: .85em; color: var(--discret); }
+
+/* ---------- (v105) Écran de chargement et préparation de la 3D ---------- */
+#ecran-chargement { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; background: #0d131c; color: #eef3f8; }
+#ecran-chargement .ch-carte { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px; text-align: center; }
+#ecran-chargement svg { width: 74px; height: auto; fill: none; stroke: #ff7a1a; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#ecran-chargement .ch-titre { margin: 0; font-size: 1.4rem; font-weight: 700; }
+#ecran-chargement .ch-texte { margin: 0; opacity: .75; }
+#ecran-chargement .ch-barre { width: min(240px, 60vw); height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
+#ecran-chargement .ch-barre i { display: block; width: 40%; height: 100%; background: #ff7a1a; animation: ch-va 1.1s ease-in-out infinite alternate; }
+@keyframes ch-va { from { transform: translateX(0); } to { transform: translateX(150%); } }
+#charge-3d { position: fixed; right: 14px; bottom: 14px; z-index: 101; display: flex; flex-direction: column; gap: 6px; min-width: 190px; max-width: min(340px, calc(100vw - 28px)); padding: 10px 14px; border-radius: 10px; background: rgba(15,20,30,.94); color: #eef3f8; font-size: .85rem; box-shadow: 0 8px 28px rgba(0,0,0,.35); }
+#charge-3d[hidden] { display: none; }
+#charge-3d .c3-barre { height: 4px; border-radius: 4px; background: rgba(255,255,255,.14); overflow: hidden; }
+#charge-3d .c3-barre i { display: block; height: 100%; width: 0; background: #ff7a1a; transition: width .25s; }
+#charge-3d.erreur .c3-barre { display: none; }
+#charge-3d.erreur { border: 1px solid #e5533d; }
+#btn-cest-parti:disabled { opacity: .5; cursor: progress; }
+
+/* ---------- (v105) Cadence visée et cible allégée dans l'encart du bloc ---------- */
+#hz-bloc .bl-mini span.cad-ok b { color: #58D6A4; }
+#hz-bloc .bl-mini span.cad-moyen b { color: #FFB45E; }
+#hz-bloc .bl-mini span.cad-loin b { color: #FF6B6B; }
+#hz-bloc .bl-mini span.cad-bas::before { content: "▲"; margin-right: .2em; font-size: .75em; color: inherit; }
+#hz-bloc .bl-mini span.cad-haut::before { content: "▼"; margin-right: .2em; font-size: .75em; color: inherit; }
+#hud-zone[data-hud-intervalles="clair"] #hz-bloc .bl-mini span.cad-ok b { color: #11774F; }
+#hud-zone[data-hud-intervalles="clair"] #hz-bloc .bl-mini span.cad-moyen b { color: #A65A00; }
+#hud-zone[data-hud-intervalles="clair"] #hz-bloc .bl-mini span.cad-loin b { color: #C0262B; }
+#hz-bloc.allege .bl-cible { background: #6CC7FF; }
+#hz-bloc.allege .bl-cible #bl-detail { font-weight: 800; }
+
+/* ---------- (v105) Séances prévues dans Nolio ---------- */
+.sq-nolio { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 10px; }
+.sq-nolio ul { flex-basis: 100%; margin: 0; padding: 0; list-style: none; max-height: 220px; overflow: auto; }
+.sq-nolio li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 2px; border-top: 1px solid var(--trait); font-size: .88rem; }
+.sq-nolio li.auj span { font-weight: 700; }
+#btn-nolio-jour[hidden] { display: none; }
+
+/* ---------- (v105) Mes records ---------- */
+#onglet-historique section[data-h="records"] h2 + .grille-stats { margin-bottom: 8px; }
+#onglet-historique section[data-h="records"] .legende-graph + h2 { margin-top: 20px; }
+.rec-defile { overflow-x: auto; }
+.rec-table th:first-child, .rec-table td:first-child { text-align: left; white-space: normal; }
+.rec-monde { margin-top: 6px; }
+.rec-monde summary { cursor: pointer; padding: 6px 0; font-weight: 700; }
+.rec-graph { position: relative; }
+.rec-graph svg { display: block; max-width: 100%; height: auto; }
+.rec-grille { stroke: rgba(255,255,255,.09); stroke-width: 1; }
+.rec-axe { fill: var(--discret); font-size: 12px; font-variant-numeric: tabular-nums; }
+.rec-ligne { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.rec-point { fill: var(--accent); stroke: var(--carte); stroke-width: 2; }
+.rec-valeur { fill: var(--texte); font-size: 13px; font-weight: 700; }
+.rec-repere { stroke: rgba(255,255,255,.4); stroke-width: 1; }
+.rec-bulle { position: absolute; z-index: 2; pointer-events: none; padding: 5px 9px; border-radius: 8px; background: rgba(8,13,20,.95); border: 1px solid var(--trait); color: var(--texte); font-size: .82rem; white-space: nowrap; }
+.rec-bulle[hidden] { display: none; }
+
+/* ---------- (v105) Rappel de sauvegarde ---------- */
+.rappel-sauve { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,138,71,.55); background: rgba(255,107,26,.1); font-size: .9rem; text-align: left; }
+.rappel-sauve[hidden] { display: none; }
+.rappel-sauve span { flex-basis: 100%; }
+
+/* ---------- (v105) Motifs de maillot au garage ---------- */
+.g-m-maillots { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+.g-m-maillots .g-vign svg { width: 100%; max-width: 110px; height: auto; }
+
+/* ---------- (v105) Course de la semaine (accueil) ---------- */
+.cs-parcours { font-size: .9rem; margin-bottom: 10px; }
+.cs-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.cs-table { margin-bottom: 10px; font-size: .88rem; }
+.cs-table[hidden] { display: none; }
+.cs-table tr.tete td { color: var(--discret); font-size: .8rem; }
+.cs-table td { padding: 5px 6px; }
+.cs-table td:first-child { width: 2.4em; }
+.cs-table td:nth-child(2) { text-align: left; white-space: normal; }
+.cs-table tr.moi td { font-weight: 700; color: var(--accent-clair); }
+#cs-code-sortie { width: 100%; margin-bottom: 10px; }
+
+/* ---------- (v105) Écran de course : petit écran et télé (js/demarrage.js, majPresentation) ---------- */
+#monde-conteneur[data-presentation="compact"] .hud-zone { font-size: calc(clamp(9.5px, 1.6cqw, 17px) * var(--hud, 1)); }
+#monde-conteneur[data-presentation="compact"] .dock-jeu { bottom: calc(5.9 * clamp(9.5px, 1.6cqw, 17px) * var(--hud, 1) + 4px); }
+#monde-conteneur[data-presentation="compact"] :is(#hz-aero, #hz-meteo, #hz-tours, #hz-pente-av) { display: none !important; }
+#monde-conteneur[data-presentation="tele"] .hud-zone { font-size: calc(clamp(10px, 1.68cqw, 40px) * var(--hud, 1)); }
+#monde-conteneur[data-presentation="tele"] .dock-jeu { bottom: calc(5.9 * clamp(10px, 1.68cqw, 40px) * var(--hud, 1) + 4px); }
+#monde-conteneur[data-presentation="tele"] :is(#hz-aero, #hz-meteo, #hz-tours, #hz-carte, #hz-pente-av) { display: none !important; }
+#monde-conteneur[data-presentation="tele"] #hud-zone .enc-l { font-size: .62em; letter-spacing: .02em; }
+/* encart du segment un peu plus petit, pour moins cacher le cycliste */
+#monde-conteneur:is([data-presentation="tele"], [data-presentation="compact"]) #hud-zone #hz-segment .carte-b { font-size: .8em; }
+/* petit écran peu haut (téléphone couché, petite fenêtre) : la course occupe toute la fenêtre ; « ← Mondes » ramène la barre du haut */
+body.course-plein .barre-app, body.course-plein .astuce-monde { display: none; }
+body.course-plein main { padding: 0; max-width: none; margin: 0; }
+body.course-plein #world-jeu { padding: 0; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+body.course-plein #world-jeu .monde { height: 100vh; height: 100dvh; min-height: 0; margin: 0; border-radius: 0; }
+/* télé : bandeau du haut resserré et texte un peu moins grand, pour ne pas passer sous le bloc de puissance */
+#monde-conteneur[data-presentation="tele"] .hud-zone { font-size: calc(clamp(10px, 1.56cqw, 38px) * var(--hud, 1)); }
+#monde-conteneur[data-presentation="tele"] .dock-jeu { bottom: calc(5.9 * clamp(10px, 1.56cqw, 38px) * var(--hud, 1) + 4px); }
+#monde-conteneur[data-presentation="tele"] #hud-zone #hz-haut .it { padding: 0 .65em; min-width: 3.4em; }
+#monde-conteneur[data-presentation="tele"] #hud-zone #hz-haut .u { letter-spacing: .06em; }
+
+/* (v105) fenêtre de fin de sortie, sur fond blanc : tous les boutons restent lisibles (« Envoyer à Nolio » et « Plus tard » étaient blancs sur blanc) */
+#resume-fin-c button:not(.plein):not(.rf-photo) { color: #1b2430; background: #eef2f6; border-color: #d5dde6; }
+#resume-fin-c button:not(.plein):not(.rf-photo):hover { background: #e2e8ef; }

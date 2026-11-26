@@ -156,8 +156,9 @@ function rafraichir() {
     : pTr !== null ? "Puissance mesurée par le home trainer." : "Aucune puissance reçue pour l’instant.";
 
   if (modeActuel() === "erg") {
-    majAffichageErg();
+    majAffichageErg(ecoule);
   } else {
+    ErgDoux.reinit();
     if (seance.puisCourse) finEchauffement();          // ERG coupé à la main pendant l'échauffement : la course part quand même
     $("etat-seance").textContent = "";
     $("pente-affichee").innerHTML = fr1(penteMonde()) + "&nbsp;%";
@@ -517,9 +518,11 @@ function lancerPeloton() {
   // (v94) formats de course (points, montagne, élimination, poursuite, chasse, leader) : js/formats.js
   let F = null;
   if (typeof Formats !== "undefined") { if (mode === "course" && !et) F = Formats.preparer(); else Formats.oublier(); }
+  // (v105) course de la semaine (js/course-semaine.js) : mêmes adversaires, mêmes tours, même vent chez tous
+  const CS = mode === "course" && !et && typeof CourseSemaine !== "undefined" ? CourseSemaine.depart() : (typeof CourseSemaine !== "undefined" && CourseSemaine.quitterVent(), null);
   Peloton.demarrer({ mode, niveau: et ? et.niveau : $("peloton-niveau").value, ftp: ftp(), poids: parseFloat($("poids").value) || 75, wprime: 14841,   /* (v72) réserve W′ des coureurs virtuels : valeur fixe, plus réglable */
-                     d0: balade.distance, longueur: route.longueur, boucle: !!route.boucle, pente: penteA, equipe: et ? Tour.equipe(mode) : (F && F.equipe) || null, enEquipe: false, parEquipe: !!(et && et.ttt),
-                     tours: F && F.tours !== undefined ? F.tours : route.boucle ? (et ? et.tours : parseInt($("peloton-tours").value, 10) || 0) : 0, nombre: F && F.nombre ? F.nombre : nombre,
+                     d0: balade.distance, longueur: route.longueur, boucle: !!route.boucle, pente: penteA, equipe: CS ? CS.equipe : et ? Tour.equipe(mode) : (F && F.equipe) || null, graineFixe: CS ? CS.graine : 0, enEquipe: false, parEquipe: !!(et && et.ttt),
+                     tours: CS ? CS.tours : F && F.tours !== undefined ? F.tours : route.boucle ? (et ? et.tours : parseInt($("peloton-tours").value, 10) || 0) : 0, nombre: F && F.nombre ? F.nombre : nombre,
                      hook: F ? F.hook : null, longueurFixe: F ? F.longueurFixe || 0 : 0 });
   if (F) Formats.apresDemarrage();
   // (v86) contre-la-montre : vélo de CLM obligatoire et rampe de départ (jamais de rampe si la sortie est déjà commencée)
@@ -703,7 +706,7 @@ function majTours() {
         const nb = Math.floor(L / PAS_PR) + 1;
         if (tours.valide && !multi && tours.marques.length >= nb && tl > 20 && (!tours.pr || tl < tours.pr.t - 0.05)) {
           const m = tours.marques.slice(0, nb).map((x) => Math.round(x * 10) / 10); m.push(Math.round(tl * 10) / 10);
-          tours.pr = { t: Math.round(tl * 10) / 10, m }; ecrirePR(tours.pr); tours.nouveauPR = true; majInfoPR();
+          tours.pr = { t: Math.round(tl * 10) / 10, m, date: Date.now() }; ecrirePR(tours.pr); tours.nouveauPR = true; majInfoPR();
           log("Nouveau record du circuit : " + formatDuree(Math.round(tl)) + ".");
         }
         // (v69 suite) arrivée contre le fantôme : qui a gagné, et de combien
@@ -778,6 +781,7 @@ function construireResume() {
   try { res.format = typeof Formats !== "undefined" ? Formats.resume() : null; } catch (e) { res.format = null; }   // (v94) résultat du format de course
   if (res.format && Formats.rang()) { const fr = Formats.rang(); res.rang = fr; if (course) { course.rang = fr[0]; course.n = fr[1]; course.fini = fr[2]; } }
   try { res.tour = typeof Tour !== "undefined" ? Tour.finEtape() : null; } catch (e) { res.tour = null; }   // (v69 suite) étape d'un Tour : temps, classements, maillots
+  try { res.courseSemaine = typeof CourseSemaine !== "undefined" ? CourseSemaine.terminer(course) : null; } catch (e) { res.courseSemaine = null; }   // (v105)
   try { res.prog = Progression.terminer(course); } catch (e) { res.prog = null; }   // expérience, défis et badges (v69)
   if (seance.ftpTest) { res.ftp = seance.ftpTest; seance.ftpTest = null; }          // (v69 suite) test FTP fait pendant la sortie
   try { res.photos = typeof Photos !== "undefined" ? Photos.pour(session.debut) : []; } catch (e) { res.photos = []; }   // (v72) photos de la sortie
@@ -816,7 +820,9 @@ function afficherResume(res) {
     res.tours.forEach((x, i) => { h += '<div class="rf-l' + (x === mini && res.tours.length > 1 ? " best" : "") + '"><span>Tour ' + (i + 1) + "</span><b>" + formatDuree(Math.round(x)) + "</b></div>"; });
   }
   if (typeof Photos !== "undefined") h += Photos.htmlResume(res.photos);
+  if (res.courseSemaine) h += CourseSemaine.htmlResume(res.courseSemaine);   // (v105)
   if (typeof Nolio !== "undefined") h += Nolio.htmlResume();          // (v98)
+  h += htmlRappelSauvegarde();                                       // (v105)
   h += '<div class="rf-boutons"><button id="resume-detail">Voir le détail</button><button id="resume-accueil" class="plein">Retour à l’accueil</button></div>';
   $("resume-fin-c").innerHTML = h; $("resume-fin").hidden = false;
   if (typeof Photos !== "undefined") Photos.brancherResume($("resume-fin-c"), res.photos);

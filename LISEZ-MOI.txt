@@ -10,7 +10,7 @@ Merci de tester l'application ! Elle est en cours de développement : tes retour
      (clic droit > Ouvrir avec > Google Chrome). Microsoft Edge fonctionne aussi.
    - Sur ordinateur uniquement (Mac ou PC), pas sur téléphone ni tablette.
    - Safari et Firefox ne savent pas se connecter en Bluetooth au home trainer : utilise Chrome ou Edge.
-   - Il faut une connexion Internet (moteur 3D, cartes et reliefs des mondes réels).
+   - Une connexion Internet est utile pour les cartes et reliefs des mondes réels et les sorties de groupe.
    - Rien à installer d'autre : tout se passe dans le navigateur.
 
 

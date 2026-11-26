@@ -30,7 +30,13 @@ const BIBLIO = [
   { cat: "Sur le parcours", nom: "Efforts en montée – tempo (85 %)", desc: "Tu roules tranquille (55 %) entre les montées ; dès que le parcours monte, la cible passe à 85 % du FTP jusqu’au sommet, puis tu récupères. Les montées sont celles du parcours (segments chronométrés). Montée annoncée 200 m avant.", blocs: [[8, 55], [6, 85], [4, 55], [6, 85], [4, 55], [6, 85], [8, 50]], dyn: { type: "montees", effort: 85, recup: 55 } },
   { cat: "Sur le parcours", nom: "Efforts en montée – seuil (98 %)", desc: "Récupération à 55 % entre les montées, puis 98 % du FTP à chaque montée jusqu’au sommet. Des intervalles au seuil posés exactement là où le parcours monte.", blocs: [[8, 55], [7, 98], [4, 55], [7, 98], [4, 55], [7, 98], [8, 50]], dyn: { type: "montees", effort: 98, recup: 55 } },
   { cat: "Sur le parcours", nom: "Efforts en montée – VO2 (112 %)", desc: "Récupération à 50 % entre les montées, puis 112 % du FTP à chaque montée : très dur, prévois des montées courtes (Mur de Huy, Ardennes) ou arrête-toi avant le sommet avec la touche N.", blocs: [[8, 50], [3, 112], [4, 50], [3, 112], [4, 50], [3, 112], [8, 50]], dyn: { type: "montees", effort: 112, recup: 50 } },
-  { cat: "Tests", nom: "Test en rampe", desc: "La puissance monte jusqu’à l’épuisement : ton meilleur 1 min × 0,75 estime le FTP.", blocs: [[5, 45], [20, 50, 130], [5, 40]] }
+  { cat: "Tests", nom: "Test en rampe", desc: "La puissance monte jusqu’à l’épuisement : ton meilleur 1 min × 0,75 estime le FTP.", blocs: [[5, 45], [20, 50, 130], [5, 40]] },
+  // (v105) force et vélocité : cadence visée pendant les efforts (6e valeur) ; ajoutées à la fin pour garder la place des autres séances
+  { cat: "Force et vélocité", nom: "Force 10 × 2 min à 55 tr/min", desc: "Efforts courts à basse cadence, à 75 % du FTP, avec 2 min souples entre chaque. Gros braquet, buste calme. Si tes genoux font mal, monte la cadence ou arrête.", blocs: [[12, 50, 70], ...rep(10, [[2, 75, undefined, false, undefined, 55], [2, 55]]), [6, 55, 45]] },
+  { cat: "Force et vélocité", nom: "Force 5 × 5 min à 60 tr/min", desc: "Force en endurance : 80 % du FTP à basse cadence. Récupération souple entre les blocs. Si tes genoux font mal, monte la cadence ou arrête.", blocs: [[12, 50, 70], ...rep(5, [[5, 80, undefined, false, undefined, 60], [3, 55]]), [6, 55, 45]] },
+  { cat: "Force et vélocité", nom: "Vélocité 8 × 1 min à 110 tr/min", desc: "Tourner vite sans à-coups : 1 min à 110 tr/min, 2 min tranquilles. La puissance reste modérée, c’est la jambe qui travaille.", blocs: [[12, 50, 70], ...rep(8, [[1, 65, undefined, false, undefined, 110], [2, 55]]), [6, 55, 45]] },
+  { cat: "Force et vélocité", nom: "Vélocité en escalier", desc: "La cadence monte marche après marche (95, 100, 105, 110, 115 tr/min) puis redescend : un bon exercice de coordination.", blocs: [[12, 50, 70], ...[95, 100, 105, 110, 115, 105, 95].flatMap((c) => [[2, 65, undefined, false, undefined, c], [1, 55]]), [6, 55, 45]] },
+  { cat: "Force et vélocité", nom: "Force et vélocité alternées", desc: "5 fois : 3 min en force à 55 tr/min puis 1 min rapide à 105 tr/min, et 3 min de récupération.", blocs: [[12, 50, 70], ...rep(5, [[3, 78, undefined, false, undefined, 55], [1, 65, undefined, false, undefined, 105], [3, 55]]), [6, 55, 45]] }
 ];
 const blocsVersIntervalles = (blocs) => blocs.map(([min, pct, fin, libre, fc, cad]) => {
   const iv = fin !== undefined ? { min, pct, fin } : { min, pct };
@@ -96,6 +102,63 @@ function rendreSeance() {
   dessinerSeance();
 }
 
+/* ----- (v105) ERG plus doux : transition entre deux puissances, et cible allégée si la cadence s'effondre -----
+   La cible du bloc (seance.cibleW) ne change pas : c'est elle qui est affichée et évaluée (étoiles, alertes, rapport).
+   Seule la puissance envoyée au home trainer (seance.commandeW) passe en douceur d'une valeur à l'autre, ou baisse.
+   Réglages (Sensations de route) gardés avec ceux des alertes. */
+const ErgDoux = (function () {
+  const SAUT = 15, MONTEE = 5, DESCENTE = 3;      // un changement d'au moins 15 W est étalé sur 5 s (montée) ou 3 s (descente)
+  const PART = 0.6, ATTENTE = 4, REPRISE = 3, MARGE = 12;   // allègement à 60 % après 4 s sous le seuil, retour après 3 s à seuil + 12 tr/min
+  let cible = null, base = null, trans = null, k = 1, allege = false, bas = 0, haut = 0;
+  const reinit = () => { cible = base = trans = null; k = 1; allege = false; bas = haut = 0; };
+  const reglages = () => (typeof Alertes !== "undefined" ? Alertes.config() : { douce: false, allege: false, allegeSeuil: 45 });
+  // cadence sous laquelle la cible est allégée : le réglage, ou 15 tr/min sous la cadence visée du bloc si elle est plus basse (travail de force)
+  const seuil = (iv) => { const s = reglages().allegeSeuil || 45; return iv && iv.cad ? Math.min(s, iv.cad - 15) : s; };
+  function adoucie(w, dureeBloc) {
+    if (!reglages().douce || base === null) { trans = null; return w; }
+    if (cible !== null && Math.abs(w - cible) >= SAUT) {
+      const max = w > base ? MONTEE : DESCENTE;
+      trans = { de: base, t0: balade.temps, dur: dureeBloc ? Math.max(1, Math.min(max, dureeBloc * 0.15)) : max };
+    }
+    if (!trans) return w;
+    const p = (balade.temps - trans.t0) / trans.dur;
+    if (p >= 1 || p < 0) { trans = null; return w; }
+    return trans.de + (w - trans.de) * p;
+  }
+  function allegement(w, iv, cadence, dt) {
+    const actif = reglages().allege && cadence !== null && balade.temps > 10 && (balade.enCours || balade.auto) && w >= 0.55 * ftp();
+    const avant = allege;
+    if (!actif) { allege = false; bas = haut = 0; }
+    else {
+      const s = seuil(iv);
+      if (cadence < s) { bas += dt; haut = 0; } else { bas = 0; haut = cadence >= s + MARGE ? haut + dt : 0; }
+      if (!allege && bas >= ATTENTE) allege = true;
+      else if (allege && haut >= REPRISE) allege = false;
+    }
+    if (allege !== avant && actif) {
+      log(allege ? "ERG : cadence trop basse, la cible est allégée." : "ERG : cadence retrouvée, la cible revient progressivement.");
+      // à l'arrêt complet (pause voulue, fin de sortie) la cible est allégée sans grande annonce
+      if (typeof annoncer === "function" && !$("onglet-world").hidden && (!allege || cadence > 0)) annoncer(allege ? "Cible allégée" : "Cible rétablie", allege ? "relance les jambes : la puissance revient quand ta cadence remonte" : "la puissance remonte en 10 secondes", "", 5);
+    }
+    // baisse en 2 s, retour en 10 s
+    k = allege ? Math.max(PART, k - dt * 0.2) : Math.min(1, k + dt * 0.04);
+    if (!reglages().allege) k = 1;
+  }
+  return {
+    reinit,
+    // w : cible du bloc ; renvoie la puissance à envoyer au home trainer
+    commander(w, iv, dureeBloc, cadence, dt) {
+      const b = adoucie(w, dureeBloc);
+      cible = w; base = b;
+      allegement(w, iv, cadence, Math.max(0, Math.min(1, dt || 0)));
+      return Math.round(b * k);
+    },
+    libre: reinit,      // effort libre : la reprise en ERG se fait directement, sans allègement resté d'avant
+    allege: () => allege || k < 0.97,
+    seuil
+  };
+})();
+
 /* ----- (v95) séances qui suivent le parcours : la puissance cible dépend de la position (pente, ou montées détectées) ----- */
 function montéesDyn() {
   if (route._montDyn && route._montDynL === route.longueur) return route._montDyn;
@@ -119,7 +182,7 @@ function blocDyn() {
   const depuis = passees.length ? passees[passees.length - 1].e : route.boucle ? cs[cs.length - 1].e - L : 0;
   return { type: "recup", i: j, part: (x - depuis) / Math.max(1, debutM - depuis), reste: debutM - x };
 }
-function majErgDyn() {
+function majErgDyn(dt) {
   const dyn = seance.dyn, d = balade.distance, L = route.longueur, W = ftp();
   let pct = dyn.recup || dyn.base || 55, cible = "", lignes = [], etat = "plat";
   if (dyn.type === "profil") {
@@ -147,21 +210,22 @@ function majErgDyn() {
     if (!cs.length && !seance.dynAvert) { seance.dynAvert = true; log("Séance « " + seance.nom + " » : aucune montée détectée sur ce parcours, la cible reste à la récupération."); }
   }
   const watts = Math.round(pct * W / 100 * (seance.k || 1));
-  envoyerPuissanceCible(watts);
+  seance.commandeW = ErgDoux.commander(watts, null, 0, balade.cadence, dt);
+  envoyerPuissanceCible(seance.commandeW);
   seance.dynInfo = { cible, lignes, watts, bloc: blocDyn() };       // (v103) détails pour l'encart du bloc en cours
   seance.cibleW = watts; seance.ergVu = true;
   if (seance.dynEtat !== null && seance.dynEtat !== etat && dyn.type === "montees" && typeof annoncer === "function" && !$("onglet-world").hidden) {
     annoncer(etat === "montee" ? "Montée : effort !" : "Sommet : récupère", etat === "montee" ? Math.round(pct) + " % du FTP jusqu’au sommet (" + watts + " W)" : "retour à " + Math.round(dyn.recup) + " % du FTP", "", 4);
   }
   seance.dynEtat = etat;
-  $("pente-affichee").innerHTML = watts + "&nbsp;W";
+  $("pente-affichee").innerHTML = seance.commandeW + "&nbsp;W";
   $("pente-envoyee").textContent = trainer.pret ? "Puissance cible imposée au home trainer : " + cible + "." : "Home trainer non connecté : la puissance cible n’est pas envoyée.";
   $("etat-seance").textContent = "Séance qui suit le parcours : " + (seance.nom || "") + ".";
   $("a-venir").textContent = lignes.join(" · ");
 }
 
-function majAffichageErg() {
-  if (seance.dyn) { majErgDyn(); return; }                      // (v95) séance qui suit le parcours
+function majAffichageErg(dt) {
+  if (seance.dyn) { majErgDyn(dt); return; }                    // (v95) séance qui suit le parcours
   const t = balade.temps - seance.t0;
   const total = dureeSeance();
   if (!seance.intervalles.length) {
@@ -191,7 +255,7 @@ function majAffichageErg() {
     if (t - m[0] < 10 && typeof annoncer === "function") annoncer(m[1], "", "", Math.min(30, Math.max(4, m[2] || 8)));
   }
   if (cur.iv.libre) {
-    seance.cibleW = 0; seance.ergVu = true;
+    seance.cibleW = 0; seance.commandeW = 0; seance.ergVu = true; ErgDoux.libre();
     envoyerPenteValeur(0);
     $("pente-affichee").innerHTML = "Libre";
     $("pente-envoyee").textContent = "Effort libre : choisis ton braquet, à fond mais régulier. Reste " + formatDuree(cur.reste) + ".";
@@ -202,10 +266,11 @@ function majAffichageErg() {
   }
   let watts = Math.round(pctA(cur.iv, 1 - cur.reste / (cur.iv.min * 60)) * ftp() / 100 * (seance.k || 1));   // seance.k : intensité réglée au clavier (↑ ↓)
   if (cur.iv.fc) watts = puissancePourFc(cur, watts);
-  envoyerPuissanceCible(watts);
+  seance.commandeW = ErgDoux.commander(watts, cur.iv, cur.iv.min * 60, balade.cadence, dt);
+  envoyerPuissanceCible(seance.commandeW);
   if (seance.cibleW !== watts) seance.cibleDepuis = balade.temps;      // (v97) alertes : on laisse 15 s à la cible pour s'installer
   seance.cibleW = watts; seance.ergVu = true;
-  $("pente-affichee").innerHTML = watts + "&nbsp;W";
+  $("pente-affichee").innerHTML = seance.commandeW + "&nbsp;W";
   $("pente-envoyee").textContent = trainer.pret
     ? "Puissance cible imposée au home trainer, intervalle " + (cur.i + 1) + "/" + seance.intervalles.length + ", reste " + formatDuree(cur.reste)
     : "Home trainer non connecté : la puissance cible n’est pas envoyée.";
@@ -297,6 +362,7 @@ function finEchauffement() {                                   // départ de la 
   log("Échauffement terminé : départ de la course.");
 }
 function chargerSeance(blocs, activerErg, nom, textes, dyn) {
+  ErgDoux.reinit(); seance.commandeW = 0;
   etatFc.i = -1; seance.puisCourse = false; seance.avantEchauf = null; seance.k = 1; seance.saute = false;
   seance.dyn = dyn || null; seance.dynInfo = null; seance.dynEtat = null; seance.ergVu = false; seance.cibleW = 0;     // (v95) séance qui suit le parcours : pas d'intervalles chronométrés
   seance.intervalles = dyn ? [] : Array.isArray(blocs[0]) ? blocsVersIntervalles(blocs) : blocs.map((x) => Object.assign({}, x));
@@ -329,11 +395,11 @@ function sauverImportees() { try { localStorage.setItem(CLE_SEANCES, JSON.string
 
 /* ----- (v76) Bibliothèque : liste à gauche (filtres par catégorie), détail de la séance choisie à droite ----- */
 const SQ = { filtre: "toutes", sel: "" };
-const SQ_FILTRES = [["toutes", "Toutes"], ["Endurance et récupération", "Endurance"], ["Tempo et sweet spot", "Tempo"], ["Seuil", "Seuil"], ["VO2max et anaérobie", "VO2max"], ["Tests", "Tests"], ["Sur le parcours", "Sur le parcours"], ["mes", "Mes séances"]];
+const SQ_FILTRES = [["toutes", "Toutes"], ["Endurance et récupération", "Endurance"], ["Tempo et sweet spot", "Tempo"], ["Seuil", "Seuil"], ["VO2max et anaérobie", "VO2max"], ["Force et vélocité", "Force et vélocité"], ["Tests", "Tests"], ["Sur le parcours", "Sur le parcours"], ["mes", "Mes séances"]];
 const niveauSeance = (IF) => (IF < 0.6 ? "Facile" : IF < 0.75 ? "Modérée" : IF < 0.9 ? "Soutenue" : IF < 1.02 ? "Dure" : "Très dure");
 function itemsBiblio() {
   const l = [];
-  seancesImportees.forEach((s, i) => l.push({ cle: "imp:" + s.nom, cat: "mes", nom: s.nom, desc: (s.cree ? "Créée par toi." : "Importée depuis un fichier.") + (s.textes && s.textes.length ? " Contient des messages affichés pendant l’effort." : ""),
+  seancesImportees.forEach((s, i) => l.push({ cle: "imp:" + s.nom, cat: "mes", nom: s.nom, desc: (s.cree ? "Créée par toi." : s.nolio ? "Séance prévue dans Nolio : les watts sont ceux calculés par Nolio." : "Importée depuis un fichier.") + (s.textes && s.textes.length ? " Contient des messages affichés pendant l’effort." : ""),
     ints: s.ints, textes: s.textes, modif: s.cree && typeof Createur !== "undefined" ? () => Createur.modifier(s) : null,
     suppr: () => { if (!confirm("Supprimer la séance « " + s.nom + " » ?")) return; seancesImportees.splice(i, 1); sauverImportees(); rendreBiblio(); } }));
   BIBLIO.forEach((b, i) => l.push({ cle: "bib:" + i, cat: b.cat, nom: b.nom, desc: b.desc, ints: blocsVersIntervalles(b.blocs), dyn: b.dyn }));

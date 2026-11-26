@@ -188,8 +188,27 @@ const HudSeance = (function () {
     ecrire("bl-fc", fc !== null && fc !== undefined ? String(fc) : "–");
     ecrire("bl-cad", balade.cadence > 0 ? String(Math.round(balade.cadence)) : "–");
     if (dyn) majParcours(); else majIntervalles(puissance);
+    majCadence();
+    majAllegement();
   }
 
+  // (v105) cadence du bloc : vert à 5 tr/min près, orange à 10 près, rouge au-delà, avec le sens à corriger
+  function majCadence() {
+    const cur = !seance.dyn && seance.intervalles.length ? intervalleA(balade.temps - seance.t0) : null, iv = cur ? cur.iv : null;
+    const boite = $("bl-cad").parentElement, c = balade.cadence;
+    let classe = "";
+    if (iv && iv.cad && c > 0) {
+      const ec = c - iv.cad;
+      classe = Math.abs(ec) <= 5 ? "cad-ok" : (Math.abs(ec) <= 10 ? "cad-moyen" : "cad-loin") + (ec < 0 ? " cad-bas" : " cad-haut");
+    }
+    if (boite.className !== classe) boite.className = classe;
+  }
+  // (v105) cible allégée (cadence effondrée) : indiquée dans la case orange
+  function majAllegement() {
+    const on = ErgDoux.allege() && seance.commandeW > 0;
+    $("hz-bloc").classList.toggle("allege", on);
+    if (on) ecrire("bl-detail", "allégée : " + seance.commandeW + " W");
+  }
   // boutons ▲ ▼ : même réglage d'intensité que les flèches du clavier
   for (const [id, sens] of [["se-plus", 1], ["se-moins", -1]]) $(id).addEventListener("click", (e) => { reglerIntensite(sens); ecrire("se-k", Math.round(seance.k * 100) + " %"); e.currentTarget.blur(); });
 

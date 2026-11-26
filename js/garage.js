@@ -58,6 +58,19 @@ const Garage = (function () {
     }[s];
     return '<svg viewBox="0 0 120 70" aria-hidden="true"><g fill="' + c + '" stroke="' + D + '" stroke-width="2.6" stroke-linejoin="round">' + corps + '</g><path d="M' + (s === "chrono" ? 4 : 12) + ',54 L110,57 L110,62 L' + (s === "chrono" ? 4 : 12) + ',60 Z" fill="' + D + '"/>' + det + "</svg>";
   }
+  // (v105) maillot vu de face, avec le motif tel que la 3D le dessine
+  function svgMaillot(motif, c1, c2, c3) {
+    const forme = "M40,6 L16,16 L8,36 L24,42 L28,34 L28,66 L72,66 L72,34 L76,42 L92,36 L84,16 L60,6 C56,14 44,14 40,6 Z";
+    const manches = (g, d) => (g ? '<path d="M40,6 L16,16 L8,36 L24,42 L28,34 L31,10 Z" fill="' + g + '"/>' : "") + (d ? '<path d="M60,6 L84,16 L92,36 L76,42 L72,34 L69,10 Z" fill="' + d + '"/>' : "");
+    const id = "gm" + motif;
+    const dessin = {
+      1: manches(c2, c2), 2: manches(c2, null), 3: '<rect x="0" y="48" width="100" height="22" fill="' + c2 + '"/>', 4: '<rect x="43" y="0" width="14" height="70" fill="' + c2 + '"/>',
+      5: '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="0" y2="1"><stop offset=".15" stop-color="' + c1 + '"/><stop offset=".95" stop-color="' + c2 + '"/></linearGradient></defs><rect width="100" height="70" fill="url(#' + id + ')"/>',
+      6: '<rect x="28" y="28" width="44" height="11" fill="' + c2 + '"/>', 7: '<rect x="28" y="48" width="44" height="18" fill="' + c3 + '"/>' + manches(c2, c2),
+      8: '<path d="M28,66 L28,48 L33,58 L38,44 L44,58 L50,42 L56,58 L62,44 L67,58 L72,48 L72,66 Z" fill="' + c2 + '"/>' + manches(c3, c3)
+    }[motif] || "";
+    return '<svg viewBox="0 0 100 72" aria-hidden="true"><clipPath id="cm' + motif + '"><path d="' + forme + '"/></clipPath><g clip-path="url(#cm' + motif + ')"><path d="' + forme + '" fill="' + c1 + '"/>' + dessin + '</g><path d="' + forme + '" fill="none" stroke="#20242b" stroke-width="2"/></svg>';
+  }
   const VERRES_C = { orange: ["#ffb347", "#d8432f"], bleu: ["#8fd0ff", "#2f6fc0"], violet: ["#d6a0ff", "#6b3fb0"], fume: ["#6b727c", "#1d2229"] };
   function svgLunettes(v) {
     const [a, b] = VERRES_C[v] || VERRES_C.fume;
@@ -124,7 +137,7 @@ const Garage = (function () {
     ["cheveux", "Cheveux", () => trouver("avatar-coiffure", val("avatar-coiffure"))],
     ["tete", "Tête", () => (chk("avatar-casque") ? (CASQUES.find((c) => c[0] === val("avatar-casque-style")) || CASQUES[0])[1] : "Sans casque")],
     ["lunettes", "Lunettes", () => (chk("avatar-lunettes") ? VERRES_T[val("avatar-verres")] || "" : "Sans")],
-    ["maillot", "Maillot", () => trouver("avatar-maillot", val("avatar-maillot"))],
+    ["maillot", "Maillot", () => trouver("avatar-maillot", val("avatar-maillot")) + (val("avatar-motif") !== "0" ? " · " + trouver("avatar-motif", val("avatar-motif")).toLowerCase() : "")],
     ["cuissard", "Cuissard", () => (val("avatar-bas-style") === "long" ? "Collant long" : "Cuissard")],
     ["chaussettes", "Chaussettes", () => trouver("avatar-chaussettes", val("avatar-chaussettes"))]
   ];
@@ -176,7 +189,14 @@ const Garage = (function () {
       return carte({ a: "lunettes", v: "", actif: !on, vign: '<svg viewBox="0 0 120 70" aria-hidden="true"><circle cx="60" cy="36" r="26" fill="none" stroke="#9aa4b2" stroke-width="3" stroke-dasharray="6 6"/></svg>', nom: "Sans lunettes", sous: "" }) +
         Object.keys(VERRES_T).map((k) => carte({ a: "lunettes", v: k, actif: on && val("avatar-verres") === k, vign: svgLunettes(k), nom: VERRES_T[k], sous: "" })).join("");
     },
-    maillot() { return titre("Couleur du maillot") + pastillesSel("avatar-maillot") + '<div class="g-nom">' + esc(trouver("avatar-maillot", val("avatar-maillot"))) + "</div>"; },
+    maillot() {                                  // (v105) couleur, motif (certains à débloquer) et couleurs du motif
+      const m = val("avatar-motif");
+      let h = titre("Couleur du maillot") + pastillesSel("avatar-maillot") + '<div class="g-nom">' + esc(trouver("avatar-maillot", val("avatar-maillot"))) + "</div>" + titre("Motif") +
+        '<div class="g-mosaique g-m-maillots">' + opts("avatar-motif").map((o) => carteMateriel("avatar-motif", o, { vign: svgMaillot(+o.v, hex(val("avatar-maillot")), hex(val("avatar-maillot2")), hex(val("avatar-maillot3"))), nom: o.t })).join("") + "</div>";
+      if (m !== "0") h += titre("Deuxième couleur") + pastillesSel("avatar-maillot2");
+      if (m === "7" || m === "8") h += titre(m === "7" ? "Couleur du bas du maillot" : "Couleur des manches") + pastillesSel("avatar-maillot3");
+      return h;
+    },
     cuissard() {
       return titre("Style") + '<div class="g-puces g-gros">' + puce("avatar-bas-style", "cuissard", val("avatar-bas-style") === "cuissard", "Cuissard (jambes nues)") + puce("avatar-bas-style", "long", val("avatar-bas-style") === "long", "Collant long") + "</div>" +
         titre("Couleur") + pastillesSel("avatar-bas");

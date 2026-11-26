@@ -35,7 +35,10 @@ const Rapport = (function () {
       const moy = part.reduce((s, x) => s + x, 0) / part.length, dans = part.filter((x) => Math.abs(x - cible) <= 0.1 * cible).length / part.length;
       const tenu = iv.fin === undefined ? Math.abs(moy - cible) <= 0.05 * cible : Math.abs(moy - cible) <= 0.08 * cible;
       nb++; if (tenu) ok++;
-      lignes += '<div class="rp-l' + (tenu ? " ok" : " ko") + '"><span>' + (tenu ? "✓" : "✗") + " " + (i + 1) + ". " + formatMinutes(iv.min) + " à " + (iv.fin !== undefined ? iv.pct + "→" + iv.fin : iv.pct) + " % (" + Math.round(cible) + " W)</span><b>" + Math.round(moy) + " W · " + Math.round(dans * 100) + " % dans la cible</b></div>";
+      // (v105) cadence moyenne des blocs qui en visent une
+      const cads = iv.cad ? samples.slice(a + 15, b).map((x) => x.c).filter((c) => c > 0) : [];
+      const txtCad = cads.length >= 20 ? " · " + Math.round(cads.reduce((s, x) => s + x, 0) / cads.length) + " tr/min (visés " + iv.cad + ")" : "";
+      lignes += '<div class="rp-l' + (tenu ? " ok" : " ko") + '"><span>' + (tenu ? "✓" : "✗") + " " + (i + 1) + ". " + formatMinutes(iv.min) + " à " + (iv.fin !== undefined ? iv.pct + "→" + iv.fin : iv.pct) + " % (" + Math.round(cible) + " W)</span><b>" + Math.round(moy) + " W · " + Math.round(dans * 100) + " % dans la cible" + txtCad + "</b></div>";
     });
     if (!nb) return "";
     return '<div class="rp-bloc"><div class="rp-t">Intervalles de « ' + echapper(seance.nom || "la séance") + " » : " + ok + " sur " + nb + " tenus</div>" + lignes + "</div>";

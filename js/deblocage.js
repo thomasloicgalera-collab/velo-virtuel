@@ -4,16 +4,19 @@
    (js/progression.js). Tout le matériel d'avant la v101 reste libre, ainsi que trois nouveautés.
    Un matériel verrouillé ne peut être ni choisi dans le garage, ni gardé par un réglage enregistré ou restauré :
    corriger() est appelé partout où le choix est lu (lireApparence et majMateriel dans js/demarrage.js).
-   Les coureurs virtuels et les amis d'une sortie de groupe ne sont pas concernés.
+   Les coureurs virtuels et les amis d'une sortie de groupe ne sont pas concernés. (v105) Les motifs de maillot se débloquent aussi.
    ===================================================================== */
 const Deblocage = (function () {
   // niveau demandé ; ce qui n'est pas dans la liste est libre
   const NIVEAUX = {
     "avatar-velo": { addict: 1, noah: 6, c68: 10, bmc: 14 },
     "avatar-roues": { corima45: 1, cosmic45: 1, comete45: 2, comete50: 3, streem45: 4, bora35: 5, enve40: 7, zipp404: 8, mavic52: 9,
-      streem60: 11, duraace: 12, shamal: 13, sharq: 16, lw_ob: 18, wake6560: 20 }
+      streem60: 11, duraace: 12, shamal: 13, sharq: 16, lw_ob: 18, wake6560: 20 },
+    // (v105) motifs de maillot (numéros du dessin dans js/monde3d.js) ; uni, manches et bas sont libres
+    "avatar-motif": { "0": 1, "1": 1, "3": 1, "6": 2, "4": 4, "2": 6, "7": 8, "5": 12, "8": 15 }
   };
-  const SECOURS = { "avatar-velo": "mystero", "avatar-roues": "50" };   // matériel libre repris si le choix est verrouillé
+  const SECOURS = { "avatar-velo": "mystero", "avatar-roues": "50", "avatar-motif": "0" };   // matériel libre repris si le choix est verrouillé
+  const TYPES = { "avatar-velo": "velo", "avatar-roues": "roues", "avatar-motif": "maillot" };
   const dernier = Object.assign({}, SECOURS);
 
   const niveauActuel = () => Progression.niveau().n;
@@ -32,7 +35,7 @@ const Deblocage = (function () {
     const l = [];
     for (const liste in NIVEAUX) for (const id in NIVEAUX[liste]) {
       const n = NIVEAUX[liste][id];
-      if (n > 1) l.push({ liste, id, niveau: n, velo: liste === "avatar-velo", nom: nomDe(liste, id), ouvert: niveauActuel() >= n });
+      if (n > 1) l.push({ liste, id, niveau: n, velo: liste === "avatar-velo", type: TYPES[liste], nom: nomDe(liste, id), ouvert: niveauActuel() >= n });
     }
     return l.sort((a, b) => a.niveau - b.niveau);
   }

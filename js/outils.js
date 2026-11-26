@@ -8,7 +8,7 @@ const UUID = {
   POWER: 0x1818, POWER_MEAS: 0x2A63,
   HR: 0x180D, HR_MEAS: 0x2A37
 };
-const VERSION_APPLI = 104;      // (v102) affichée dans les Réglages et écrite dans les .FIT ; à changer à chaque version, avec VERSION dans sw.js
+const VERSION_APPLI = 105;      // (v102) affichée dans les Réglages et écrite dans les .FIT ; à changer à chaque version, avec VERSION dans sw.js
 const $ = (id) => document.getElementById(id);
 const maintenant = () => performance.now();
 const frais = (ts) => ts && maintenant() - ts < 5000;
@@ -79,7 +79,7 @@ function sauverReglages() {
     localStorage.setItem(CLE_REGLAGES, JSON.stringify({
       ventActif: $("vent-actif").checked, materielAero: $("materiel-aero").value, ftp: $("ftp").value, autoDepart: $("auto-depart").checked, fcmax: $("fcmax").value, poids: $("poids").value,
       difficulte: $("difficulte").value, descente: $("difficulte-desc").value, autopause: $("auto-pause").checked,
-      monde: $("monde").value, qualite: $("qualite").value, resolution: $("resolution").value, moment: $("moment").value, meteo: $("meteo").value, foule: $("foule").value, saison: $("saison").value, pietons: $("pietons").value, pelotonMode: $("peloton-mode").value, courseFormat: $("course-format").value, poursuiteKm: $("poursuite-km").value, fantomePR: $("fantome-pr").checked, fantomeSeg: $("fantome-seg").checked, echauffement: $("echauffement").checked, freinage: $("freinage").checked, ravito: $("ravito").checked, zonesFcAuto: $("zones-fc-auto").checked, hudTaille: $("hud-taille").value, pelotonNiveau: $("peloton-niveau").value, pelotonTours: $("peloton-tours").value, pelotonNombre: $("peloton-nombre").value, sexe: $("sexe").value, apparence: Object.assign(lireApparence(), veloAvantClm ? { velo: veloAvantClm } : {}), age: $("age").value, taille: $("taille").value, avatarMaillot: $("avatar-maillot").value, vue: $("vue-camera").value, poussiere: $("poussiere").checked, son: $("son-actif").checked, volume: $("son-volume").value, affiche3d: $("affiche-3d").checked,
+      monde: $("monde").value, qualite: $("qualite").value, resolution: $("resolution").value, moment: $("moment").value, meteo: $("meteo").value, foule: $("foule").value, saison: $("saison").value, pietons: $("pietons").value, pelotonMode: $("peloton-mode").value, courseFormat: $("course-format").value, poursuiteKm: $("poursuite-km").value, fantomePR: $("fantome-pr").checked, fantomeSeg: $("fantome-seg").checked, echauffement: $("echauffement").checked, freinage: $("freinage").checked, ravito: $("ravito").checked, zonesFcAuto: $("zones-fc-auto").checked, hudTaille: $("hud-taille").value, hudPresentation: $("hud-presentation").value, pelotonNiveau: $("peloton-niveau").value, pelotonTours: $("peloton-tours").value, pelotonNombre: $("peloton-nombre").value, sexe: $("sexe").value, apparence: Object.assign(lireApparence(), veloAvantClm ? { velo: veloAvantClm } : {}), age: $("age").value, taille: $("taille").value, avatarMaillot: $("avatar-maillot").value, vue: $("vue-camera").value, poussiere: $("poussiere").checked, son: $("son-actif").checked, volume: $("son-volume").value, affiche3d: $("affiche-3d").checked,
       intervalles: seance.intervalles
     }));
   } catch (e) { /* stockage indisponible : on ignore */ }

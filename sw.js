@@ -1,16 +1,20 @@
 "use strict";
 /* (v76) Service worker : l'application s'installe comme un logiciel et démarre sans Internet.
    - fichiers de l'application : réseau d'abord (la dernière version publiée arrive tout de suite), copie gardée en secours hors ligne ;
-   - bibliothèques CDN (Three.js, PeerJS, html-to-image : adresses versionnées) : copie gardée, réseau seulement la première fois ;
+   - les bibliothèques (Three.js, PeerJS, html-to-image) sont depuis la v105 dans lib/, comme les autres fichiers de l'application ;
    - tout le reste (décor OpenStreetMap, IGN, serveur PeerJS) passe directement par le réseau, sans copie.
    Changer VERSION à chaque nouvelle version de l'application. */
-const VERSION = "velo-v104";
+const VERSION = "velo-v105";
 const LOCAL = [
   "./", "index.html", "style.css", "manifest.webmanifest",
   "icones/apple-touch-icon.png",
   "icones/icone-192.png",
   "icones/icone-512.png",
   "icones/icone-maskable-512.png",
+  "lib/three.min.js",
+  "lib/peerjs.min.js",
+  "lib/html-to-image.js",
+  "js/chargement.js",
   "js/accueil.js",
   "js/analyse.js",
   "js/boucle-hud-son.js",
@@ -36,6 +40,8 @@ const LOCAL = [
   "js/photos.js",
   "js/hud-perso.js",
   "js/hud-seance.js",
+  "js/records.js",
+  "js/course-semaine.js",
   "js/progression.js",
   "js/deblocage.js",
   "js/revoir-ecran2.js",
@@ -44,17 +50,10 @@ const LOCAL = [
   "js/tour.js",
   "js/velos.js",
 ];
-const CDN = [
-  "https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js",
-  "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js",
-  "https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"
-];
-
 self.addEventListener("install", (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(VERSION);
     await Promise.all(LOCAL.map((u) => c.add(new Request(u, { cache: "reload" })).catch(() => {})));
-    await Promise.all(CDN.map((u) => c.add(new Request(u, { mode: "no-cors" })).catch(() => {})));
     self.skipWaiting();
   })());
 });
@@ -68,10 +67,6 @@ self.addEventListener("fetch", (e) => {
   const r = e.request;
   if (r.method !== "GET") return;
   const u = new URL(r.url);
-  if (CDN.includes(r.url)) {
-    e.respondWith(caches.match(r.url).then((c) => c || fetch(r).then((rep) => { const copie = rep.clone(); caches.open(VERSION).then((x) => x.put(r, copie)); return rep; })));
-    return;
-  }
   if (u.origin !== self.location.origin) return;
   e.respondWith((async () => {
     try {

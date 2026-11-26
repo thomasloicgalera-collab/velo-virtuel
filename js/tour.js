@@ -51,7 +51,8 @@ const Tour = (function () {
       const m = monde(c[0]), L = m.route.longueur, tours = toursEtape(m, c[1], type);
       etapes.push({ monde: c[0], type, tours, km: Math.round((m.route.boucle ? tours * L : L) / 100) / 10 });
     }
-    const eqp = Peloton.tirerEquipe(nombre, enEquipe, parseInt($("avatar-maillot").value, 10) || undefined);
+    const moi = lireApparence();                                           // (v105) coéquipiers : ton maillot, son motif et ton cuissard
+    const eqp = Peloton.tirerEquipe(nombre, enEquipe, parseInt($("avatar-maillot").value, 10) || undefined, { motif: moi.motif, c2: moi.maillot2, c3: moi.maillot3, bas: moi.bas });
     tour = { id: Date.now(), nom: NOMS_TOUR[Math.floor(Math.random() * NOMS_TOUR.length)], niveau, equipe: eqp, etapes, res: [], gc: {}, pois: {}, sprint: {}, fini: false, enEquipe: !!enEquipe, gcEq: {}, eqDe: { Toi: 0 } };
     if (enEquipe) { tour.equipes = Peloton.NOMS_EQUIPES.map((n, i) => { const sp = eqp.find((x) => x.eq === i); return sp ? { nom: sp.nomEq, couleur: sp.couleur, kit: sp.kit } : null; }).filter(Boolean); for (const sp of eqp) tour.eqDe[sp.nom] = sp.eq; for (let i = 0; i < tour.equipes.length; i++) tour.gcEq[i] = 0; }
     for (const n of noms()) { tour.gc[n] = 0; tour.pois[n] = 0; tour.sprint[n] = 0; }
